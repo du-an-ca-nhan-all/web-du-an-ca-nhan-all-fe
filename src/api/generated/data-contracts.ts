@@ -157,6 +157,20 @@ export interface CategoryUpsertRequest {
   totalUse?: string;
 }
 
+export interface CheckTokenAccessParams {
+  /** ID ngẫu nhiên (UUID) của token cần kiểm tra */
+  id: string;
+  /** Tên organization cần kiểm tra riêng (bỏ trống để kiểm tra tất cả org và repo trong DB) */
+  org?: string;
+}
+
+export interface CheckTokenOrgAccessParams {
+  /** ID ngẫu nhiên (UUID) của token cần kiểm tra */
+  id: string;
+  /** Tên (slug/login) của organization cần kiểm tra */
+  org: string;
+}
+
 export interface CommentDto {
   comment?: string;
   /** @format int32 */
@@ -696,6 +710,31 @@ export interface GitHubImportOrganizationsResponse {
   skippedExistingOrgs?: string[];
 }
 
+export interface GitHubOrgAccessStatus {
+  /**
+   * Token có quyền truy cập organization này hay không
+   * @example true
+   */
+  accessible?: boolean;
+  /** Thông báo lỗi nếu không thể truy cập */
+  error?: string;
+  /**
+   * Tên (login/slug) của GitHub Organization
+   * @example "my-org"
+   */
+  org?: string;
+  /**
+   * Vai trò của tài khoản trong organization (admin, member, hoặc null nếu không xác định)
+   * @example "admin"
+   */
+  role?: string;
+  /**
+   * Trạng thái membership trong organization (active, pending, hoặc null)
+   * @example "active"
+   */
+  state?: string;
+}
+
 export interface GitHubPullRepoDomainResponse {
   /**
    * Domain hiện tại trong database sau khi pull
@@ -736,6 +775,41 @@ export interface GitHubPullRepoDomainResponse {
   source?: string;
   /** Có cập nhật dữ liệu mới vào database hay không */
   updated?: boolean;
+}
+
+export interface GitHubRepoAccessStatus {
+  /**
+   * Token có quyền truy cập repository này hay không
+   * @example true
+   */
+  accessible?: boolean;
+  /**
+   * Token có quyền admin trên repository hay không
+   * @example true
+   */
+  canAdmin?: boolean;
+  /**
+   * Token có quyền ghi (push) vào repository hay không
+   * @example true
+   */
+  canPush?: boolean;
+  /** Thông báo lỗi nếu không thể truy cập */
+  error?: string;
+  /**
+   * Tên đầy đủ của repository dạng org/repo
+   * @example "my-org/my-repo"
+   */
+  fullRepository?: string;
+  /**
+   * Tên organization chứa repository
+   * @example "my-org"
+   */
+  org?: string;
+  /**
+   * Tên repository
+   * @example "my-repo"
+   */
+  repoName?: string;
 }
 
 export interface GitHubRepoCommitSummaryResponse {
@@ -879,6 +953,55 @@ export interface GitHubSquashCommitsResponse {
    * @example "1a2b3c4d5e..."
    */
   rootCommitSha?: string;
+}
+
+export interface GitHubTokenAccessCheckResponse {
+  /**
+   * Số organizations token truy cập được
+   * @format int32
+   */
+  accessibleOrganizationsCount?: number;
+  /**
+   * Số repositories token truy cập và có quyền ghi (push)
+   * @format int32
+   */
+  accessibleRepositoriesCount?: number;
+  /** True nếu token có quyền truy cập 100% organizations và có quyền push vào 100% repositories trong phạm vi kiểm tra */
+  hasFullAccess?: boolean;
+  /**
+   * Số organizations token không truy cập được
+   * @format int32
+   */
+  inaccessibleOrganizationsCount?: number;
+  /**
+   * Số repositories token không truy cập được hoặc thiếu quyền ghi
+   * @format int32
+   */
+  inaccessibleRepositoriesCount?: number;
+  /** Token có đang active hay không */
+  isActive?: boolean;
+  /** Token có đang được đánh dấu là super token hay không */
+  isSuperToken?: boolean;
+  /** Chi tiết quyền truy cập theo từng organization */
+  organizations?: GitHubOrgAccessStatus[];
+  /** Chi tiết quyền truy cập theo từng repository */
+  repositories?: GitHubRepoAccessStatus[];
+  /** Organization cụ thể được kiểm tra (null nếu kiểm tra toàn bộ DB) */
+  targetOrg?: string;
+  /** ID ngẫu nhiên (UUID) của token được kiểm tra */
+  tokenId?: string;
+  /** Chuỗi token đã che bớt ký tự */
+  tokenPreview?: string;
+  /**
+   * Tổng số organizations được kiểm tra
+   * @format int32
+   */
+  totalOrganizations?: number;
+  /**
+   * Tổng số repositories được kiểm tra
+   * @format int32
+   */
+  totalRepositories?: number;
 }
 
 export interface GitHubTokenCreateRequest {

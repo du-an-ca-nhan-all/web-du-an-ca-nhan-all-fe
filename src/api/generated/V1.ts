@@ -17,6 +17,8 @@ import {
   AuthResponse,
   CategoryServiceModel,
   CategoryUpsertRequest,
+  CheckTokenAccessParams,
+  CheckTokenOrgAccessParams,
   ConfigureDefaultRepoParams,
   CountParams,
   CreateForkRepositoryParams,
@@ -56,6 +58,7 @@ import {
   GitHubRepoDefaultConfigResponse,
   GitHubRootDomainRequest,
   GitHubSquashCommitsResponse,
+  GitHubTokenAccessCheckResponse,
   GitHubTokenCreateRequest,
   GitHubTokenResponse,
   GitHubTokenUpdateRequest,
@@ -148,6 +151,45 @@ export class V1<SecurityDataType = unknown> {
     this.http.request<CategoryServiceModel[], any>({
       path: `/v1/api/video_sex_remote_gitlab_db/categorys`,
       method: "GET",
+      ...params,
+    });
+  /**
+   * @description Nếu không truyền org: kiểm tra token với toàn bộ organizations và repositories đang có trong DB. Nếu truyền org: chỉ kiểm tra với organization đó và các repo thuộc org đó. Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name CheckTokenAccess
+   * @summary Kiểm tra quyền truy cập của token với toàn bộ hoặc 1 organization & repositories trong DB
+   * @request GET:/v1/github/tokens/{id}/check-access
+   * @secure
+   */
+  checkTokenAccess = (
+    { id, ...query }: CheckTokenAccessParams,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubTokenAccessCheckResponse, any>({
+      path: `/v1/github/tokens/${id}/check-access`,
+      method: "GET",
+      query: query,
+      secure: true,
+      ...params,
+    });
+  /**
+   * @description Kiểm tra xem token (theo ID) có quyền truy cập organization chỉ định và các repository thuộc organization đó trong DB hay chưa. Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name CheckTokenOrgAccess
+   * @summary Kiểm tra quyền truy cập của token với 1 organization cụ thể
+   * @request GET:/v1/github/tokens/{id}/organizations/{org}/check-access
+   * @secure
+   */
+  checkTokenOrgAccess = (
+    { id, org }: CheckTokenOrgAccessParams,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubTokenAccessCheckResponse, any>({
+      path: `/v1/github/tokens/${id}/organizations/${org}/check-access`,
+      method: "GET",
+      secure: true,
       ...params,
     });
   /**
