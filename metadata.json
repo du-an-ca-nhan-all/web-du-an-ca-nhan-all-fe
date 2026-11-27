@@ -1,6 +1,0 @@
-{
-  "name": "Super Admin Console",
-  "description": "Cổng quản trị tập trung tài khoản người dùng và phân quyền đa dịch vụ dành riêng cho Super Admin.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

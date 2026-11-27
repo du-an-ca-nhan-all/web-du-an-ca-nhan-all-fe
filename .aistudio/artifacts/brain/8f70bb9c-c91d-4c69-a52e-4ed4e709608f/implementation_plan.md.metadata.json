@@ -1,6 +1,0 @@
-{
-  "summary":  "Kế hoạch thiết kế và kiến trúc cho Cổng Quản Trị Hệ Sinh Thái (Super Admin Console) tích hợp OpenAPI Web Du An Ca Nhan: xác thực độc quyền Super Admin, quản lý danh sách & chi tiết tài khoản, gán/gỡ vai trò đa dịch vụ, tạo tài khoản mới, tra cứu danh mục Role theo Service, hỗ trợ chuyển đổi server Staging/Local qua proxy thông minh, chế độ Sáng/Tối và cấu trúc Sidebar phân module sẵn sàng mở rộng.",
-  "updatedAt":  "2026-11-19T08:46:09.825946672Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
