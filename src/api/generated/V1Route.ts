@@ -17,16 +17,22 @@ import {
   CategoryServiceModel,
   CategoryUpsertRequest,
   CreateVideoRequest,
+  GitHubAccessibleOrgResponse,
   GitHubCreateForkRepoRequest,
   GitHubCreateRepoRequest,
   GitHubCreateRepoResponse,
   GitHubFileContentResponse,
+  GitHubImportOrganizationsRequest,
+  GitHubImportOrganizationsResponse,
   GitHubPullRepoDomainResponse,
   GitHubRepoCommitSummaryResponse,
   GitHubRepoDefaultConfigRequest,
   GitHubRepoDefaultConfigResponse,
   GitHubRootDomainRequest,
   GitHubSquashCommitsResponse,
+  GitHubTokenCreateRequest,
+  GitHubTokenResponse,
+  GitHubTokenUpdateRequest,
   GitHubUploadResponse,
   LoginRequest,
   OrganizationEntity,
@@ -206,6 +212,22 @@ export namespace V1 {
   }
 
   /**
+   * @description Lưu GitHub token mới vào bảng github_upload.tokens với token và cờ isSuperToken. Tự động sinh ID ngẫu nhiên (UUID), mặc định isActive = true và tự động fetch thông tin account từ GitHub API /user. Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name CreateToken
+   * @summary Thêm mới GitHub token
+   * @request POST:/v1/github/tokens
+   * @secure
+   */
+  export namespace CreateToken {
+    export type RequestParams = {};
+    export type RequestQuery = {};
+    export type RequestBody = GitHubTokenCreateRequest;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubTokenResponse;
+  }
+
+  /**
    * @description Lưu mới thông tin video vào kho `video_sex_remote_gitlab_db` cùng metadata category.
    * @tags X-video manage
    * @name CreateVideo
@@ -253,6 +275,25 @@ export namespace V1 {
        * @example 1
        */
       id: number;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = unknown;
+  }
+
+  /**
+   * @description Xoá một GitHub token khỏi bảng github_upload.tokens theo ID. Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name DeleteToken
+   * @summary Xoá GitHub token
+   * @request DELETE:/v1/github/tokens/{id}
+   * @secure
+   */
+  export namespace DeleteToken {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token cần xoá */
+      id: string;
     };
     export type RequestQuery = {};
     export type RequestBody = never;
@@ -435,6 +476,25 @@ export namespace V1 {
   }
 
   /**
+   * @description Gọi GitHub API /user/orgs bằng token tương ứng với ID để trả về danh sách organizations có thể truy cập kèm trạng thái đã import hay chưa. Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name GetAccessibleOrganizations
+   * @summary Lấy danh sách GitHub organizations mà token có quyền truy cập
+   * @request GET:/v1/github/tokens/{id}/organizations
+   * @secure
+   */
+  export namespace GetAccessibleOrganizations {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token */
+      id: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubAccessibleOrgResponse[];
+  }
+
+  /**
    * @description Truy vấn thông tin tài khoản và toàn bộ danh sách role theo từng service mà tài khoản sở hữu.
    * @tags account
    * @name GetAccountById
@@ -501,6 +561,29 @@ export namespace V1 {
     export type RequestBody = never;
     export type RequestHeaders = {};
     export type ResponseBody = RootDomainEntity[];
+  }
+
+  /**
+   * @description Truy vấn danh sách các GitHub token trong bảng github_upload.tokens (có thể lọc riêng super token). Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name GetAllTokens
+   * @summary Lấy danh sách GitHub tokens
+   * @request GET:/v1/github/tokens
+   * @secure
+   */
+  export namespace GetAllTokens {
+    export type RequestParams = {};
+    export type RequestQuery = {
+      /**
+       * Nếu true chỉ trả về các super token
+       * @default false
+       * @example false
+       */
+      superTokenOnly?: boolean;
+    };
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubTokenResponse[];
   }
 
   /**
@@ -626,6 +709,25 @@ export namespace V1 {
   }
 
   /**
+   * @description Truy vấn thông tin chi tiết của một token và thông tin account sở hữu theo ID ngẫu nhiên (UUID). Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name GetToken
+   * @summary Lấy chi tiết GitHub token
+   * @request GET:/v1/github/tokens/{id}
+   * @secure
+   */
+  export namespace GetToken {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token */
+      id: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubTokenResponse;
+  }
+
+  /**
    * @description Truyền vào URL hoặc slug video Viet69 để lấy title, mô tả, ảnh thumbnail, danh sách tag (URL và tên hiển thị), đường dẫn Google Blogger và danh sách luồng tải trực tiếp.
    * @tags viet69
    * @name GetVideoInfo
@@ -684,6 +786,25 @@ export namespace V1 {
     export type RequestBody = Viet69ImportRequest;
     export type RequestHeaders = {};
     export type ResponseBody = Viet69ImportResponse;
+  }
+
+  /**
+   * @description Chỉ import các organizations nằm trong danh sách orgs gửi lên và token tương ứng với ID thực sự có quyền truy cập vào bảng github_upload.organizations. Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name ImportSelectedOrganizations
+   * @summary Import các GitHub organizations được chọn từ token
+   * @request POST:/v1/github/tokens/{id}/organizations/import
+   * @secure
+   */
+  export namespace ImportSelectedOrganizations {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token */
+      id: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = GitHubImportOrganizationsRequest;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubImportOrganizationsResponse;
   }
 
   /**
@@ -856,6 +977,25 @@ export namespace V1 {
   }
 
   /**
+   * @description Gọi GitHub API /user bằng token tương ứng với ID để cập nhật lại thông tin account (id, username, name, email, type). Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name SyncAccountInfo
+   * @summary Đồng bộ lại thông tin GitHub account cho token
+   * @request POST:/v1/github/tokens/{id}/sync-account
+   * @secure
+   */
+  export namespace SyncAccountInfo {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token cần đồng bộ thông tin account */
+      id: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubTokenResponse;
+  }
+
+  /**
    * @description Tạo bản sao lưu gộp tất cả schema của PostgreSQL (.sql.gz) và upload trực tiếp lên repository GitHub đã cấu hình.
    * @tags postgres-backup
    * @name TriggerBackupNow
@@ -898,6 +1038,25 @@ export namespace V1 {
     export type RequestBody = UpdateVideoImageUrlRequest;
     export type RequestHeaders = {};
     export type ResponseBody = UpdateVideoImageUrlResponse;
+  }
+
+  /**
+   * @description Cập nhật cờ isSuperToken và trạng thái kích hoạt isActive của token theo ID. Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name UpdateToken
+   * @summary Cập nhật thông tin GitHub token
+   * @request PUT:/v1/github/tokens/{id}
+   * @secure
+   */
+  export namespace UpdateToken {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token cần cập nhật */
+      id: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = GitHubTokenUpdateRequest;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubTokenResponse;
   }
 
   /**

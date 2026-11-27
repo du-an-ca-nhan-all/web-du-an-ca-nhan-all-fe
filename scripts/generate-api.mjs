@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 const SPEC_URL =
   process.env.OPENAPI_SPEC_URL ||
-  'http://quickgg.top/be-swagger-api/openapi-main-all.yaml';
+  'http://quickgg.top/be-swagger-api/openapi-main-all.yaml?a=1';
 
 const OUTPUT_DIR = path.resolve(__dirname, '../src/api/generated');
 

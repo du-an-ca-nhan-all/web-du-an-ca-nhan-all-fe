@@ -225,6 +225,11 @@ export interface DeleteRootDomainParams {
   id: number;
 }
 
+export interface DeleteTokenParams {
+  /** ID ngẫu nhiên (UUID) của token cần xoá */
+  id: string;
+}
+
 export interface DownloadVideoParams {
   /**
    * Tên file tải về tùy chỉnh
@@ -303,6 +308,11 @@ export interface FindTypeParams {
   type: string;
 }
 
+export interface GetAccessibleOrganizationsParams {
+  /** ID ngẫu nhiên (UUID) của token */
+  id: string;
+}
+
 export interface GetAccountByIdParams {
   /**
    * ID tài khoản
@@ -310,6 +320,15 @@ export interface GetAccountByIdParams {
    * @example 1
    */
   id: number;
+}
+
+export interface GetAllTokensParams {
+  /**
+   * Nếu true chỉ trả về các super token
+   * @default false
+   * @example false
+   */
+  superTokenOnly?: boolean;
 }
 
 export interface GetCommitsSummaryParams {
@@ -353,6 +372,11 @@ export interface GetServiceRolesCatalogParams {
   serviceCode?: string;
 }
 
+export interface GetTokenParams {
+  /** ID ngẫu nhiên (UUID) của token */
+  id: string;
+}
+
 export interface GetVideoInfoParams {
   /**
    * URL đầy đủ hoặc slug của video Viet69
@@ -371,6 +395,34 @@ export interface GetVideosByPageParams {
    * @example 1
    */
   page?: number;
+}
+
+export interface GitHubAccessibleOrgResponse {
+  /** URL ảnh đại diện của organization */
+  avatarUrl?: string;
+  /** Mô tả của organization trên GitHub */
+  description?: string;
+  /**
+   * GitHub numeric ID của organization
+   * @format int64
+   * @example 12345678
+   */
+  githubOrgId?: number;
+  /**
+   * Đánh dấu organization này đã được import vào hệ thống hay chưa
+   * @example false
+   */
+  imported?: boolean;
+  /**
+   * Tên hiển thị của organization
+   * @example "My Organization"
+   */
+  name?: string;
+  /**
+   * Slug / login của GitHub Organization (khóa chính trong bảng organizations)
+   * @example "my-org"
+   */
+  org?: string;
 }
 
 export interface GitHubCommitInfo {
@@ -611,6 +663,39 @@ export interface GitHubFileContentResponse {
   size?: number;
 }
 
+export interface GitHubImportOrganizationsRequest {
+  /**
+   * Danh sách tên (login/slug) các GitHub organizations được chọn để import
+   * @minItems 1
+   * @example ["my-org-1","my-org-2"]
+   */
+  orgs: string[];
+}
+
+export interface GitHubImportOrganizationsResponse {
+  /** Danh sách organization mới đã được import */
+  imported?: ImportedOrganizationItem[];
+  /**
+   * Số lượng organization mới đã được import thành công
+   * @format int32
+   */
+  importedCount?: number;
+  /**
+   * Số lượng organization được chọn nhưng token không có quyền truy cập
+   * @format int32
+   */
+  notAccessibleCount?: number;
+  /** Danh sách tên organization token không có quyền truy cập */
+  notAccessibleOrgs?: string[];
+  /**
+   * Số lượng organization được chọn nhưng đã tồn tại trong hệ thống nên bỏ qua
+   * @format int32
+   */
+  skippedCount?: number;
+  /** Danh sách tên organization đã tồn tại trước đó và bị bỏ qua */
+  skippedExistingOrgs?: string[];
+}
+
 export interface GitHubPullRepoDomainResponse {
   /**
    * Domain hiện tại trong database sau khi pull
@@ -796,11 +881,115 @@ export interface GitHubSquashCommitsResponse {
   rootCommitSha?: string;
 }
 
+export interface GitHubTokenCreateRequest {
+  /**
+   * Đánh dấu là super token (có quyền truy cập toàn bộ repository). Có thể có nhiều super token.
+   * @example true
+   */
+  isSuperToken?: boolean;
+  /**
+   * GitHub Personal Access Token hoặc Fine-grained token (khóa chính)
+   * @minLength 1
+   * @example "ghp_xxxxxxxxxxxxxxxxxxxx"
+   */
+  token: string;
+}
+
+export interface GitHubTokenResponse {
+  /**
+   * Email của tài khoản GitHub
+   * @example "octocat@github.com"
+   */
+  accountEmail?: string;
+  /**
+   * Tên hiển thị của tài khoản GitHub
+   * @example "The Octocat"
+   */
+  accountName?: string;
+  /**
+   * Loại tài khoản GitHub (User, Organization, Bot)
+   * @example "User"
+   */
+  accountType?: string;
+  /**
+   * GitHub username (login)
+   * @example "octocat"
+   */
+  accountUsername?: string;
+  /**
+   * Thời điểm tạo bản ghi
+   * @format date-time
+   */
+  createdAt?: string;
+  /** Mô tả / ghi chú cho token */
+  description?: string;
+  /**
+   * Thời điểm hết hạn token
+   * @format date-time
+   */
+  expiresAt?: string;
+  /**
+   * GitHub numeric user ID của tài khoản sở hữu token
+   * @format int64
+   * @example 583231
+   */
+  githubAccountId?: number;
+  /**
+   * ID ngẫu nhiên (UUID) định danh cho token, dùng để gọi các API thay vì truyền trực tiếp token
+   * @example "550e8400-e29b-41d4-a716-446655440000"
+   */
+  id?: string;
+  /**
+   * Trạng thái kích hoạt
+   * @example true
+   */
+  isActive?: boolean;
+  /**
+   * Có phải là super token (truy cập tất cả repo) hay không
+   * @example true
+   */
+  isSuperToken?: boolean;
+  /**
+   * Chuỗi token đã che bớt ký tự ở giữa để đảm bảo an toàn
+   * @example "ghp_****R1pr"
+   */
+  tokenPreview?: string;
+  /**
+   * Thời điểm cập nhật gần nhất
+   * @format date-time
+   */
+  updatedAt?: string;
+}
+
+export interface GitHubTokenUpdateRequest {
+  /**
+   * Trạng thái kích hoạt token
+   * @example true
+   */
+  isActive?: boolean;
+  /**
+   * Đánh dấu là super token (có quyền truy cập toàn bộ repository)
+   * @example true
+   */
+  isSuperToken?: boolean;
+}
+
 export interface GitHubUploadResponse {
   /** Commit details created on GitHub */
   commit?: GitHubCommitInfo;
   /** Uploaded file metadata */
   content?: GitHubFileContentResponse;
+}
+
+export interface ImportSelectedOrganizationsParams {
+  /** ID ngẫu nhiên (UUID) của token */
+  id: string;
+}
+
+export interface ImportedOrganizationItem {
+  description?: string;
+  name?: string;
+  org?: string;
 }
 
 /** Yêu cầu đăng nhập tài khoản */
@@ -1138,6 +1327,11 @@ export interface SquashCommitsParams {
 
 export type StreamingResponseBody = any;
 
+export interface SyncAccountInfoParams {
+  /** ID ngẫu nhiên (UUID) của token cần đồng bộ thông tin account */
+  id: string;
+}
+
 export interface TagDto {
   id?: string;
   name?: string;
@@ -1163,6 +1357,11 @@ export interface TagsParams {
    */
   page?: number;
   tag: string;
+}
+
+export interface UpdateTokenParams {
+  /** ID ngẫu nhiên (UUID) của token cần cập nhật */
+  id: string;
 }
 
 export interface UpdateVideoImageUrlRequest {

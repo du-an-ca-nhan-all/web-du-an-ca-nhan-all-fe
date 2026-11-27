@@ -24,6 +24,7 @@ import {
   CreateVideoRequest,
   DeleteParams,
   DeleteRootDomainParams,
+  DeleteTokenParams,
   DownloadVideoParams,
   ExistsByIdParams,
   FindById1Params,
@@ -31,25 +32,35 @@ import {
   FindNotHaveTypeParams,
   FindRandomParams,
   FindTypeParams,
+  GetAccessibleOrganizationsParams,
   GetAccountByIdParams,
+  GetAllTokensParams,
   GetCommitsSummaryParams,
   GetFileMetadataParams,
   GetOrganizationParams,
   GetRepositoriesByOrgParams,
   GetServiceRolesCatalogParams,
+  GetTokenParams,
   GetVideoInfoParams,
   GetVideosByPageParams,
+  GitHubAccessibleOrgResponse,
   GitHubCreateForkRepoRequest,
   GitHubCreateRepoRequest,
   GitHubCreateRepoResponse,
   GitHubFileContentResponse,
+  GitHubImportOrganizationsRequest,
+  GitHubImportOrganizationsResponse,
   GitHubPullRepoDomainResponse,
   GitHubRepoCommitSummaryResponse,
   GitHubRepoDefaultConfigRequest,
   GitHubRepoDefaultConfigResponse,
   GitHubRootDomainRequest,
   GitHubSquashCommitsResponse,
+  GitHubTokenCreateRequest,
+  GitHubTokenResponse,
+  GitHubTokenUpdateRequest,
   GitHubUploadResponse,
+  ImportSelectedOrganizationsParams,
   LoginRequest,
   NewVideoParams,
   OrganizationEntity,
@@ -65,6 +76,8 @@ import {
   ServiceRolesCatalogResponse,
   SquashCommitsParams,
   StreamingResponseBody,
+  SyncAccountInfoParams,
+  UpdateTokenParams,
   UpdateVideoImageUrlRequest,
   UpdateVideoImageUrlResponse,
   UploadFileParams,
@@ -233,6 +246,24 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
+   * @description Lưu GitHub token mới vào bảng github_upload.tokens với token và cờ isSuperToken. Tự động sinh ID ngẫu nhiên (UUID), mặc định isActive = true và tự động fetch thông tin account từ GitHub API /user. Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name CreateToken
+   * @summary Thêm mới GitHub token
+   * @request POST:/v1/github/tokens
+   * @secure
+   */
+  createToken = (data: GitHubTokenCreateRequest, params: RequestParams = {}) =>
+    this.http.request<GitHubTokenResponse, any>({
+      path: `/v1/github/tokens`,
+      method: "POST",
+      body: data,
+      secure: true,
+      type: ContentType.Json,
+      ...params,
+    });
+  /**
    * @description Lưu mới thông tin video vào kho `video_sex_remote_gitlab_db` cùng metadata category.
    *
    * @tags X-video manage
@@ -277,6 +308,22 @@ export class V1<SecurityDataType = unknown> {
     this.http.request<unknown, any>({
       path: `/v1/github/root-domains/${id}`,
       method: "DELETE",
+      ...params,
+    });
+  /**
+   * @description Xoá một GitHub token khỏi bảng github_upload.tokens theo ID. Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name DeleteToken
+   * @summary Xoá GitHub token
+   * @request DELETE:/v1/github/tokens/{id}
+   * @secure
+   */
+  deleteToken = ({ id }: DeleteTokenParams, params: RequestParams = {}) =>
+    this.http.request<unknown, any>({
+      path: `/v1/github/tokens/${id}`,
+      method: "DELETE",
+      secure: true,
       ...params,
     });
   /**
@@ -389,6 +436,25 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
+   * @description Gọi GitHub API /user/orgs bằng token tương ứng với ID để trả về danh sách organizations có thể truy cập kèm trạng thái đã import hay chưa. Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name GetAccessibleOrganizations
+   * @summary Lấy danh sách GitHub organizations mà token có quyền truy cập
+   * @request GET:/v1/github/tokens/{id}/organizations
+   * @secure
+   */
+  getAccessibleOrganizations = (
+    { id }: GetAccessibleOrganizationsParams,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubAccessibleOrgResponse[], any>({
+      path: `/v1/github/tokens/${id}/organizations`,
+      method: "GET",
+      secure: true,
+      ...params,
+    });
+  /**
    * @description Truy vấn thông tin tài khoản và toàn bộ danh sách role theo từng service mà tài khoản sở hữu.
    *
    * @tags account
@@ -446,6 +512,23 @@ export class V1<SecurityDataType = unknown> {
     this.http.request<RootDomainEntity[], any>({
       path: `/v1/github/root-domains`,
       method: "GET",
+      ...params,
+    });
+  /**
+   * @description Truy vấn danh sách các GitHub token trong bảng github_upload.tokens (có thể lọc riêng super token). Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name GetAllTokens
+   * @summary Lấy danh sách GitHub tokens
+   * @request GET:/v1/github/tokens
+   * @secure
+   */
+  getAllTokens = (query: GetAllTokensParams = {}, params: RequestParams = {}) =>
+    this.http.request<GitHubTokenResponse[], any>({
+      path: `/v1/github/tokens`,
+      method: "GET",
+      query: query,
+      secure: true,
       ...params,
     });
   /**
@@ -551,6 +634,22 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
+   * @description Truy vấn thông tin chi tiết của một token và thông tin account sở hữu theo ID ngẫu nhiên (UUID). Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name GetToken
+   * @summary Lấy chi tiết GitHub token
+   * @request GET:/v1/github/tokens/{id}
+   * @secure
+   */
+  getToken = ({ id }: GetTokenParams, params: RequestParams = {}) =>
+    this.http.request<GitHubTokenResponse, any>({
+      path: `/v1/github/tokens/${id}`,
+      method: "GET",
+      secure: true,
+      ...params,
+    });
+  /**
    * @description Truyền vào URL hoặc slug video Viet69 để lấy title, mô tả, ảnh thumbnail, danh sách tag (URL và tên hiển thị), đường dẫn Google Blogger và danh sách luồng tải trực tiếp.
    *
    * @tags viet69
@@ -596,6 +695,28 @@ export class V1<SecurityDataType = unknown> {
       path: `/v1/api/viet69/import`,
       method: "POST",
       body: data,
+      type: ContentType.Json,
+      ...params,
+    });
+  /**
+   * @description Chỉ import các organizations nằm trong danh sách orgs gửi lên và token tương ứng với ID thực sự có quyền truy cập vào bảng github_upload.organizations. Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name ImportSelectedOrganizations
+   * @summary Import các GitHub organizations được chọn từ token
+   * @request POST:/v1/github/tokens/{id}/organizations/import
+   * @secure
+   */
+  importSelectedOrganizations = (
+    { id }: ImportSelectedOrganizationsParams,
+    data: GitHubImportOrganizationsRequest,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubImportOrganizationsResponse, any>({
+      path: `/v1/github/tokens/${id}/organizations/import`,
+      method: "POST",
+      body: data,
+      secure: true,
       type: ContentType.Json,
       ...params,
     });
@@ -736,6 +857,25 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
+   * @description Gọi GitHub API /user bằng token tương ứng với ID để cập nhật lại thông tin account (id, username, name, email, type). Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name SyncAccountInfo
+   * @summary Đồng bộ lại thông tin GitHub account cho token
+   * @request POST:/v1/github/tokens/{id}/sync-account
+   * @secure
+   */
+  syncAccountInfo = (
+    { id }: SyncAccountInfoParams,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubTokenResponse, any>({
+      path: `/v1/github/tokens/${id}/sync-account`,
+      method: "POST",
+      secure: true,
+      ...params,
+    });
+  /**
    * @description Tạo bản sao lưu gộp tất cả schema của PostgreSQL (.sql.gz) và upload trực tiếp lên repository GitHub đã cấu hình.
    *
    * @tags postgres-backup
@@ -781,6 +921,28 @@ export class V1<SecurityDataType = unknown> {
       path: `/v1/api/video_sex_remote_gitlab_db/image_url`,
       method: "PATCH",
       body: data,
+      type: ContentType.Json,
+      ...params,
+    });
+  /**
+   * @description Cập nhật cờ isSuperToken và trạng thái kích hoạt isActive của token theo ID. Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name UpdateToken
+   * @summary Cập nhật thông tin GitHub token
+   * @request PUT:/v1/github/tokens/{id}
+   * @secure
+   */
+  updateToken = (
+    { id }: UpdateTokenParams,
+    data: GitHubTokenUpdateRequest,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubTokenResponse, any>({
+      path: `/v1/github/tokens/${id}`,
+      method: "PUT",
+      body: data,
+      secure: true,
       type: ContentType.Json,
       ...params,
     });
