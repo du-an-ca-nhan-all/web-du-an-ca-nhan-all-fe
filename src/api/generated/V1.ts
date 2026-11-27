@@ -15,17 +15,19 @@ import {
   AssignRoleRequest,
   AssignServiceRoleParams,
   AuthResponse,
-  CategoryEntity,
   CategoryServiceModel,
+  CategoryUpsertRequest,
   ConfigureDefaultRepoParams,
   CountParams,
   CreateForkRepositoryParams,
   CreateRepositoryParams,
+  CreateVideoRequest,
   DeleteParams,
   DeleteRootDomainParams,
+  DownloadVideoParams,
   ExistsByIdParams,
   FindById1Params,
-  FindById2Params,
+  FindByIdParams,
   FindNotHaveTypeParams,
   FindRandomParams,
   FindTypeParams,
@@ -35,6 +37,8 @@ import {
   GetOrganizationParams,
   GetRepositoriesByOrgParams,
   GetServiceRolesCatalogParams,
+  GetVideoInfoParams,
+  GetVideosByPageParams,
   GitHubCreateForkRepoRequest,
   GitHubCreateRepoRequest,
   GitHubCreateRepoResponse,
@@ -57,18 +61,22 @@ import {
   RegisterRequest,
   RemoveServiceRoleParams,
   RepositoryEntity,
-  Request,
   RootDomainEntity,
   ServiceRolesCatalogResponse,
   SquashCommitsParams,
-  UpdateImageUrlRequest,
+  StreamingResponseBody,
+  UpdateVideoImageUrlRequest,
+  UpdateVideoImageUrlResponse,
   UploadFileParams,
   UploadFilePayload,
   VideoByCategoryParams,
-  VideoSexRemoteGitlabEntity,
   VideoSexRemoteGitlabServiceModel,
-  VideoSexRemoteGitlabVideoUrlEntity,
   VideoUrlDecodeModel,
+  VideoUrlSaveRequest,
+  Viet69ImportRequest,
+  Viet69ImportResponse,
+  Viet69PageResponse,
+  Viet69VideoInfoResponse,
 } from "./data-contracts";
 import { ContentType, HttpClient, RequestParams } from "./http-client";
 
@@ -158,7 +166,7 @@ export class V1<SecurityDataType = unknown> {
    * @request GET:/v1/api/category_with_video/{category}/count
    */
   count = ({ category }: CountParams, params: RequestParams = {}) =>
-    this.http.request<object, any>({
+    this.http.request<Record<string, number>, any>({
       path: `/v1/api/category_with_video/${category}/count`,
       method: "GET",
       ...params,
@@ -225,6 +233,22 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
+   * @description Lưu mới thông tin video vào kho `video_sex_remote_gitlab_db` cùng metadata category.
+   *
+   * @tags X-video manage
+   * @name CreateVideo
+   * @summary Tạo mới video
+   * @request POST:/v1/api/video_sex_remote_gitlab_db
+   */
+  createVideo = (data: CreateVideoRequest, params: RequestParams = {}) =>
+    this.http.request<CreateVideoRequest, any>({
+      path: `/v1/api/video_sex_remote_gitlab_db`,
+      method: "POST",
+      body: data,
+      type: ContentType.Json,
+      ...params,
+    });
+  /**
    * @description Xoá video theo `video_id` và `video_type`. Dùng cho tác vụ quản trị dữ liệu.
    *
    * @tags X-video manage
@@ -256,6 +280,24 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
+   * @description Tải video từ Viet69 (truyền 'video' hoặc 'googleVideoUrl'), hỗ trợ chọn chất lượng qua 'itag', tải song song N luồng qua 'threads' (mặc định 3) và HTTP Range.
+   *
+   * @tags viet69
+   * @name DownloadVideo
+   * @summary Tải video trực tiếp (streaming song song nhiều luồng)
+   * @request GET:/v1/viet69/download
+   */
+  downloadVideo = (
+    query: DownloadVideoParams = {},
+    params: RequestParams = {},
+  ) =>
+    this.http.request<StreamingResponseBody, any>({
+      path: `/v1/viet69/download`,
+      method: "GET",
+      query: query,
+      ...params,
+    });
+  /**
    * @description Kiểm tra nhanh video có tồn tại theo id hay không. Trả về 404 nếu không tìm thấy.
    *
    * @tags X-video manage
@@ -270,30 +312,14 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
-   * @description Lưu mới thông tin video vào kho `video_sex_remote_gitlab_db` cùng metadata category.
-   *
-   * @tags X-video manage
-   * @name FindById
-   * @summary Tạo mới video
-   * @request POST:/v1/api/video_sex_remote_gitlab_db
-   */
-  findById = (data: Request, params: RequestParams = {}) =>
-    this.http.request<Request, any>({
-      path: `/v1/api/video_sex_remote_gitlab_db`,
-      method: "POST",
-      body: data,
-      type: ContentType.Json,
-      ...params,
-    });
-  /**
    * @description Trả về thông tin video theo id, có thể lọc theo requireVideoType và bật/tắt truy vấn sub video.
    *
    * @tags X-video manage
-   * @name FindById1
+   * @name FindById
    * @summary Lấy chi tiết video theo id
    * @request GET:/v1/api/video_sex_remote_gitlab_db/{id}
    */
-  findById1 = ({ id, ...query }: FindById1Params, params: RequestParams = {}) =>
+  findById = ({ id, ...query }: FindByIdParams, params: RequestParams = {}) =>
     this.http.request<VideoSexRemoteGitlabServiceModel, any>({
       path: `/v1/api/video_sex_remote_gitlab_db/${id}`,
       method: "GET",
@@ -304,11 +330,11 @@ export class V1<SecurityDataType = unknown> {
    * @description Trả về các URL phát video đã giải mã cho một video cụ thể.
    *
    * @tags X-video manage
-   * @name FindById2
+   * @name FindById1
    * @summary Lấy danh sách URL theo video id
    * @request GET:/v1/api/videos/urls/{id}
    */
-  findById2 = ({ id }: FindById2Params, params: RequestParams = {}) =>
+  findById1 = ({ id }: FindById1Params, params: RequestParams = {}) =>
     this.http.request<VideoUrlDecodeModel[], any>({
       path: `/v1/api/videos/urls/${id}`,
       method: "GET",
@@ -525,6 +551,55 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
+   * @description Truyền vào URL hoặc slug video Viet69 để lấy title, mô tả, ảnh thumbnail, danh sách tag (URL và tên hiển thị), đường dẫn Google Blogger và danh sách luồng tải trực tiếp.
+   *
+   * @tags viet69
+   * @name GetVideoInfo
+   * @summary Lấy thông tin chi tiết video
+   * @request GET:/v1/viet69/video
+   */
+  getVideoInfo = (query: GetVideoInfoParams, params: RequestParams = {}) =>
+    this.http.request<Viet69VideoInfoResponse, any>({
+      path: `/v1/viet69/video`,
+      method: "GET",
+      query: query,
+      ...params,
+    });
+  /**
+   * @description Truyền vào số trang (page) để lấy danh sách video trên trang tương ứng của Viet69.
+   *
+   * @tags viet69
+   * @name GetVideosByPage
+   * @summary Lấy danh sách video theo trang
+   * @request GET:/v1/viet69/page
+   */
+  getVideosByPage = (
+    query: GetVideosByPageParams = {},
+    params: RequestParams = {},
+  ) =>
+    this.http.request<Viet69PageResponse, any>({
+      path: `/v1/viet69/page`,
+      method: "GET",
+      query: query,
+      ...params,
+    });
+  /**
+   * @description Kiểm tra tồn tại theo slug. Nếu chưa tồn tại, tải chất lượng cao nhất (song song N luồng), tách thành các file nhỏ HLS fMP4 (init.mp4 + seg_XXXX.m4s + index.m3u8) thuần Java không cần ffmpeg, upload toàn bộ cùng thumbnail vào 1 GitHub repository ngẫu nhiên theo đường dẫn slug trong 1 commit duy nhất và lưu vào hệ thống với type HUB_SERVER_M3U8_CUSTOM_DOMAIN và GOOGLE.
+   *
+   * @tags X-video manage
+   * @name ImportFromViet69
+   * @summary Import video từ slug Viet69 sang HLS fMP4 (.m3u8) trên GitHub & lưu hệ thống
+   * @request POST:/v1/api/viet69/import
+   */
+  importFromViet69 = (data: Viet69ImportRequest, params: RequestParams = {}) =>
+    this.http.request<Viet69ImportResponse, any>({
+      path: `/v1/api/viet69/import`,
+      method: "POST",
+      body: data,
+      type: ContentType.Json,
+      ...params,
+    });
+  /**
    * @description Xác thực tài khoản bằng username/email + password. Nếu truyền serviceCode, token sẽ tự động resolve role của service đó (nếu là SuperAdmin sẽ luôn có quyền tối cao SUPER_ADMIN).
    *
    * @tags account
@@ -632,10 +707,7 @@ export class V1<SecurityDataType = unknown> {
    * @summary Lưu URL video
    * @request POST:/v1/api/video_sex_remote_gitlab_db_video_url
    */
-  save = (
-    data: VideoSexRemoteGitlabVideoUrlEntity,
-    params: RequestParams = {},
-  ) =>
+  save = (data: VideoUrlSaveRequest, params: RequestParams = {}) =>
     this.http.request<string, any>({
       path: `/v1/api/video_sex_remote_gitlab_db_video_url`,
       method: "POST",
@@ -685,7 +757,7 @@ export class V1<SecurityDataType = unknown> {
    * @summary Cập nhật category
    * @request PATCH:/v1/api/category
    */
-  update = (data: CategoryEntity, params: RequestParams = {}) =>
+  update = (data: CategoryUpsertRequest, params: RequestParams = {}) =>
     this.http.request<boolean, any>({
       path: `/v1/api/category`,
       method: "PATCH",
@@ -701,8 +773,11 @@ export class V1<SecurityDataType = unknown> {
    * @summary Cập nhật image URL của video
    * @request PATCH:/v1/api/video_sex_remote_gitlab_db/image_url
    */
-  updateImageUrl = (data: UpdateImageUrlRequest, params: RequestParams = {}) =>
-    this.http.request<VideoSexRemoteGitlabEntity, any>({
+  updateImageUrl = (
+    data: UpdateVideoImageUrlRequest,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<UpdateVideoImageUrlResponse, any>({
       path: `/v1/api/video_sex_remote_gitlab_db/image_url`,
       method: "PATCH",
       body: data,
@@ -738,8 +813,8 @@ export class V1<SecurityDataType = unknown> {
    * @summary Tạo hoặc cập nhật category
    * @request POST:/v1/api/category
    */
-  upsert = (data: CategoryEntity, params: RequestParams = {}) =>
-    this.http.request<object, any>({
+  upsert = (data: CategoryUpsertRequest, params: RequestParams = {}) =>
+    this.http.request<Record<string, number>, any>({
       path: `/v1/api/category`,
       method: "POST",
       body: data,

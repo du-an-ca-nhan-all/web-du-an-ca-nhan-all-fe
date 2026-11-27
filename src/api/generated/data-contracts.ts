@@ -138,7 +138,7 @@ export interface CategoriesParams {
   sort?: string;
 }
 
-export interface CategoryEntity {
+export interface CategoryServiceModel {
   categoryId?: string;
   categoryTypeId?: string;
   describe?: string;
@@ -146,9 +146,12 @@ export interface CategoryEntity {
   totalUse?: string;
 }
 
-export interface CategoryServiceModel {
-  categoryId?: string;
+export interface CategoryUpsertRequest {
+  /** @minLength 1 */
+  categoryId: string;
   categoryTypeId?: string;
+  /** @format date-time */
+  dateCreate?: string;
   describe?: string;
   name?: string;
   totalUse?: string;
@@ -197,6 +200,17 @@ export interface CreateRepositoryParams {
   org: string;
 }
 
+export interface CreateVideoRequest {
+  m3u8url?: string;
+  categoryServiceModels?: CategoryServiceModel[];
+  description?: string;
+  googleUrl?: string;
+  /** @minLength 1 */
+  id: string;
+  imageUrl?: string;
+  name?: string;
+}
+
 export interface DeleteParams {
   videoId: string;
   videoType: string;
@@ -211,19 +225,50 @@ export interface DeleteRootDomainParams {
   id: number;
 }
 
+export interface DownloadVideoParams {
+  /**
+   * Tên file tải về tùy chỉnh
+   * @example "my-video.mp4"
+   */
+  filename?: string;
+  /**
+   * Đường dẫn Google Blogger embed trực tiếp (tùy chọn thay cho 'video')
+   * @example "https://www.blogger.com/video.g?token=..."
+   */
+  googleVideoUrl?: string;
+  /**
+   * Mã itag chất lượng mong muốn (mặc định chọn chất lượng cao nhất)
+   * @format int32
+   * @example 22
+   */
+  itag?: number;
+  /**
+   * Số luồng tải song song (mặc định 3)
+   * @format int32
+   * @min 1
+   * @example 3
+   */
+  threads?: number;
+  /**
+   * URL đầy đủ hoặc slug của video Viet69
+   * @example "https://viet69.be/clip-hot-sinh-vien-ha-noi/"
+   */
+  video?: string;
+}
+
 export interface ExistsByIdParams {
   id: string;
 }
 
 export interface FindById1Params {
+  id: string;
+}
+
+export interface FindByIdParams {
   /** @default true */
   findSubVideo?: boolean;
   id: string;
   requireVideoType?: string;
-}
-
-export interface FindById2Params {
-  id: string;
 }
 
 export interface FindNotHaveTypeParams {
@@ -306,6 +351,26 @@ export interface GetServiceRolesCatalogParams {
    * @example "VIDEOS_MANAGE"
    */
   serviceCode?: string;
+}
+
+export interface GetVideoInfoParams {
+  /**
+   * URL đầy đủ hoặc slug của video Viet69
+   * @minLength 1
+   * @example "https://viet69.be/clip-hot-sinh-vien-ha-noi/"
+   */
+  video: string;
+}
+
+export interface GetVideosByPageParams {
+  /**
+   * Số trang cần lấy danh sách video
+   * @format int32
+   * @min 0
+   * @default 1
+   * @example 1
+   */
+  page?: number;
 }
 
 export interface GitHubCommitInfo {
@@ -1013,16 +1078,6 @@ export interface RepositoryEntity {
   repoName?: string;
 }
 
-export interface Request {
-  m3u8url?: string;
-  categoryServiceModels?: CategoryServiceModel[];
-  description?: string;
-  googleUrl?: string;
-  id?: string;
-  imageUrl?: string;
-  name?: string;
-}
-
 export interface RootDomainEntity {
   /** @format date-time */
   createdAt?: string;
@@ -1081,6 +1136,8 @@ export interface SquashCommitsParams {
   repository?: string;
 }
 
+export type StreamingResponseBody = any;
+
 export interface TagDto {
   id?: string;
   name?: string;
@@ -1108,9 +1165,23 @@ export interface TagsParams {
   tag: string;
 }
 
-export interface UpdateImageUrlRequest {
+export interface UpdateVideoImageUrlRequest {
+  /** @minLength 1 */
+  id: string;
+  /** @minLength 1 */
+  imageUrl: string;
+}
+
+export interface UpdateVideoImageUrlResponse {
+  m3u8Url?: string;
+  /** @format date-time */
+  dateCreate?: string;
+  /** @format int32 */
+  deploy?: number;
+  describe?: string;
   id?: string;
   imageUrl?: string;
+  title?: string;
 }
 
 export interface UploadFileParams {
@@ -1209,18 +1280,6 @@ export interface VideoParams {
   id: string;
 }
 
-export interface VideoSexRemoteGitlabEntity {
-  m3u8Url?: string;
-  /** @format date-time */
-  dateCreate?: string;
-  /** @format int32 */
-  deploy?: number;
-  describe?: string;
-  id?: string;
-  imageUrl?: string;
-  title?: string;
-}
-
 export interface VideoSexRemoteGitlabServiceModel {
   m3u8Url?: string;
   categoryes?: CategoryServiceModel[];
@@ -1231,15 +1290,6 @@ export interface VideoSexRemoteGitlabServiceModel {
   imageUrl?: string;
   title?: string;
   videoTypes?: VideoTypeServiceModel[];
-}
-
-export interface VideoSexRemoteGitlabVideoUrlEntity {
-  extraData?: string;
-  /** @format int32 */
-  id?: number;
-  idVideo?: string;
-  typeVideoUrl?: string;
-  urlVideo?: string;
 }
 
 export interface VideoTypeServiceModel {
@@ -1264,8 +1314,210 @@ export interface VideoUrlParams {
   id: string;
 }
 
+export interface VideoUrlSaveRequest {
+  /** @format date-time */
+  createDate?: string;
+  extraData?: string;
+  /** @minLength 1 */
+  idVideo: string;
+  /** @minLength 1 */
+  typeVideoUrl: string;
+  /** @minLength 1 */
+  urlVideo: string;
+}
+
 export interface VideoXvideosUrl {
   label?: string;
   type?: string;
+  url?: string;
+}
+
+export interface Viet69ImportRequest {
+  /**
+   * Mã itag chất lượng mong muốn (mặc định tự chọn chất lượng cao nhất)
+   * @format int32
+   * @example 22
+   */
+  itag?: number;
+  /**
+   * Slug hoặc URL đầy đủ của video Viet69
+   * @minLength 1
+   * @example "em-2k3-xuat-khau-lao-dong-nhat-ban"
+   */
+  slug: string;
+  /**
+   * Số luồng tải song song (mặc định 3)
+   * @format int32
+   * @min 1
+   * @example 3
+   */
+  threads?: number;
+}
+
+export interface Viet69ImportResponse {
+  /** Danh sách category_id đã gắn cho video */
+  categoryIds?: string[];
+  /** Mô tả video */
+  description?: string;
+  /** URL Google Blogger gốc (type = GOOGLE) */
+  googleUrl?: string;
+  /** URL ảnh thumbnail dạng custom domain sau khi upload GitHub */
+  imageUrl?: string;
+  /** Thông điệp chi tiết */
+  message?: string;
+  /** Repository GitHub ngẫu nhiên đã upload bộ HLS */
+  repository?: string;
+  /**
+   * Số lượng segment .ts đã tách
+   * @format int32
+   */
+  segmentCount?: number;
+  /** Trạng thái kết quả import */
+  status?: Viet69ImportResponseStatusEnum;
+  /** Tiêu đề video */
+  title?: string;
+  /** ID/Slug của video trong hệ thống */
+  videoId?: string;
+  /**
+   * Dung lượng video MP4 gốc đã tải (bytes)
+   * @format int64
+   */
+  videoSizeBytes?: number;
+  /** URL playlist M3U8 dạng custom domain (type = HUB_SERVER_M3U8_CUSTOM_DOMAIN) */
+  videoUrl?: string;
+}
+
+/** Trạng thái kết quả import */
+export enum Viet69ImportResponseStatusEnum {
+  IMPORTED = "IMPORTED",
+  ALREADY_EXISTS = "ALREADY_EXISTS",
+}
+
+/** Kết quả danh sách video lấy theo số trang từ Viet69 */
+export interface Viet69PageResponse {
+  /**
+   * Số trang đã truy vấn
+   * @format int32
+   * @example 1
+   */
+  page?: number;
+  /**
+   * URL trang nguồn đã scrape
+   * @example "https://viet69.be/page/1/"
+   */
+  pageUrl?: string;
+  /**
+   * Tổng số video tìm thấy trong trang
+   * @format int32
+   * @example 24
+   */
+  total?: number;
+  /** Danh sách video trong trang */
+  videos?: Viet69PageVideoItem[];
+}
+
+/** Thông tin tóm tắt một video trong danh sách trang Viet69 */
+export interface Viet69PageVideoItem {
+  /**
+   * Slug / mã định danh video
+   * @example "clip-hot-sinh-vien-ha-noi"
+   */
+  id?: string;
+  /**
+   * Ảnh đại diện (thumbnail) nếu có trên trang danh sách
+   * @example "https://viet69.be/wp-content/uploads/thumb.jpg"
+   */
+  thumbnailUrl?: string;
+  /**
+   * Tiêu đề hiển thị của video
+   * @example "Clip hot sinh viên Hà Nội"
+   */
+  title?: string;
+  /**
+   * Đường dẫn chi tiết video trên Viet69
+   * @example "https://viet69.be/clip-hot-sinh-vien-ha-noi/"
+   */
+  url?: string;
+}
+
+/** Thông tin tag gắn với video Viet69 */
+export interface Viet69TagDto {
+  /**
+   * Tên hiển thị của tag
+   * @example "Sinh viên"
+   */
+  display?: string;
+  /**
+   * Slug / mã định danh tag
+   * @example "sinh-vien"
+   */
+  id?: string;
+  /**
+   * Đường dẫn URL của tag
+   * @example "https://viet69.be/tag/sinh-vien/"
+   */
+  url?: string;
+}
+
+/** Thông tin chi tiết một video Viet69 bao gồm metadata, tags và đường dẫn video Google */
+export interface Viet69VideoInfoResponse {
+  /**
+   * Mô tả video
+   * @example "Mô tả chi tiết nội dung video"
+   */
+  description?: string;
+  /**
+   * Đường dẫn trực tiếp chất lượng cao nhất (googlevideo.com) trích xuất từ Google Blogger
+   * @example "https://rr1---sn-xxx.googlevideo.com/videoplayback?itag=22..."
+   */
+  directVideoUrl?: string;
+  /**
+   * Đường dẫn Google Blogger embed video
+   * @example "https://www.blogger.com/video.g?token=AD6v5dw..."
+   */
+  googleVideoUrl?: string;
+  /**
+   * Slug / mã định danh video
+   * @example "clip-hot-sinh-vien-ha-noi"
+   */
+  id?: string;
+  /** Danh sách các luồng video trực tiếp sắp xếp theo chất lượng giảm dần */
+  streams?: Viet69VideoStreamDto[];
+  /** Danh sách tag (bao gồm id, tag hiển thị và tag URL) */
+  tags?: Viet69TagDto[];
+  /**
+   * Đường dẫn ảnh đại diện (thumbnail)
+   * @example "https://viet69.be/wp-content/uploads/thumb.jpg?width=500"
+   */
+  thumbnailUrl?: string;
+  /**
+   * Tiêu đề video
+   * @example "Clip hot sinh viên Hà Nội"
+   */
+  title?: string;
+  /**
+   * Đường dẫn trang video Viet69 đã truy vấn
+   * @example "https://viet69.be/clip-hot-sinh-vien-ha-noi/"
+   */
+  videoUrl?: string;
+}
+
+/** Định dạng luồng video trực tiếp trích xuất từ Google Blogger */
+export interface Viet69VideoStreamDto {
+  /**
+   * Mã itag của luồng video Google
+   * @format int32
+   * @example 22
+   */
+  itag?: number;
+  /**
+   * Nhãn chất lượng video
+   * @example "720p"
+   */
+  qualityLabel?: string;
+  /**
+   * Đường dẫn trực tiếp (googlevideo.com) để phát hoặc tải video
+   * @example "https://rr1---sn-xxx.googlevideo.com/videoplayback?itag=22..."
+   */
   url?: string;
 }

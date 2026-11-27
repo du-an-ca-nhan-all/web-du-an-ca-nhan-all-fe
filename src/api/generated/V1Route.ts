@@ -14,8 +14,9 @@ import {
   AccountResponse,
   AssignRoleRequest,
   AuthResponse,
-  CategoryEntity,
   CategoryServiceModel,
+  CategoryUpsertRequest,
+  CreateVideoRequest,
   GitHubCreateForkRepoRequest,
   GitHubCreateRepoRequest,
   GitHubCreateRepoResponse,
@@ -34,15 +35,19 @@ import {
   PostgresBackupResult,
   RegisterRequest,
   RepositoryEntity,
-  Request,
   RootDomainEntity,
   ServiceRolesCatalogResponse,
-  UpdateImageUrlRequest,
+  StreamingResponseBody,
+  UpdateVideoImageUrlRequest,
+  UpdateVideoImageUrlResponse,
   UploadFilePayload,
-  VideoSexRemoteGitlabEntity,
   VideoSexRemoteGitlabServiceModel,
-  VideoSexRemoteGitlabVideoUrlEntity,
   VideoUrlDecodeModel,
+  VideoUrlSaveRequest,
+  Viet69ImportRequest,
+  Viet69ImportResponse,
+  Viet69PageResponse,
+  Viet69VideoInfoResponse,
 } from "./data-contracts";
 
 export namespace V1 {
@@ -139,7 +144,7 @@ export namespace V1 {
     export type RequestQuery = {};
     export type RequestBody = never;
     export type RequestHeaders = {};
-    export type ResponseBody = object;
+    export type ResponseBody = Record<string, number>;
   }
 
   /**
@@ -201,6 +206,21 @@ export namespace V1 {
   }
 
   /**
+   * @description Lưu mới thông tin video vào kho `video_sex_remote_gitlab_db` cùng metadata category.
+   * @tags X-video manage
+   * @name CreateVideo
+   * @summary Tạo mới video
+   * @request POST:/v1/api/video_sex_remote_gitlab_db
+   */
+  export namespace CreateVideo {
+    export type RequestParams = {};
+    export type RequestQuery = {};
+    export type RequestBody = CreateVideoRequest;
+    export type RequestHeaders = {};
+    export type ResponseBody = CreateVideoRequest;
+  }
+
+  /**
    * @description Xoá video theo `video_id` và `video_type`. Dùng cho tác vụ quản trị dữ liệu.
    * @tags X-video manage
    * @name Delete
@@ -241,6 +261,52 @@ export namespace V1 {
   }
 
   /**
+   * @description Tải video từ Viet69 (truyền 'video' hoặc 'googleVideoUrl'), hỗ trợ chọn chất lượng qua 'itag', tải song song N luồng qua 'threads' (mặc định 3) và HTTP Range.
+   * @tags viet69
+   * @name DownloadVideo
+   * @summary Tải video trực tiếp (streaming song song nhiều luồng)
+   * @request GET:/v1/viet69/download
+   */
+  export namespace DownloadVideo {
+    export type RequestParams = {};
+    export type RequestQuery = {
+      /**
+       * Tên file tải về tùy chỉnh
+       * @example "my-video.mp4"
+       */
+      filename?: string;
+      /**
+       * Đường dẫn Google Blogger embed trực tiếp (tùy chọn thay cho 'video')
+       * @example "https://www.blogger.com/video.g?token=..."
+       */
+      googleVideoUrl?: string;
+      /**
+       * Mã itag chất lượng mong muốn (mặc định chọn chất lượng cao nhất)
+       * @format int32
+       * @example 22
+       */
+      itag?: number;
+      /**
+       * Số luồng tải song song (mặc định 3)
+       * @format int32
+       * @min 1
+       * @example 3
+       */
+      threads?: number;
+      /**
+       * URL đầy đủ hoặc slug của video Viet69
+       * @example "https://viet69.be/clip-hot-sinh-vien-ha-noi/"
+       */
+      video?: string;
+    };
+    export type RequestBody = never;
+    export type RequestHeaders = {
+      Range?: string;
+    };
+    export type ResponseBody = StreamingResponseBody;
+  }
+
+  /**
    * @description Kiểm tra nhanh video có tồn tại theo id hay không. Trả về 404 nếu không tìm thấy.
    * @tags X-video manage
    * @name ExistsById
@@ -258,28 +324,13 @@ export namespace V1 {
   }
 
   /**
-   * @description Lưu mới thông tin video vào kho `video_sex_remote_gitlab_db` cùng metadata category.
-   * @tags X-video manage
-   * @name FindById
-   * @summary Tạo mới video
-   * @request POST:/v1/api/video_sex_remote_gitlab_db
-   */
-  export namespace FindById {
-    export type RequestParams = {};
-    export type RequestQuery = {};
-    export type RequestBody = Request;
-    export type RequestHeaders = {};
-    export type ResponseBody = Request;
-  }
-
-  /**
    * @description Trả về thông tin video theo id, có thể lọc theo requireVideoType và bật/tắt truy vấn sub video.
    * @tags X-video manage
-   * @name FindById1
+   * @name FindById
    * @summary Lấy chi tiết video theo id
    * @request GET:/v1/api/video_sex_remote_gitlab_db/{id}
    */
-  export namespace FindById1 {
+  export namespace FindById {
     export type RequestParams = {
       id: string;
     };
@@ -296,11 +347,11 @@ export namespace V1 {
   /**
    * @description Trả về các URL phát video đã giải mã cho một video cụ thể.
    * @tags X-video manage
-   * @name FindById2
+   * @name FindById1
    * @summary Lấy danh sách URL theo video id
    * @request GET:/v1/api/videos/urls/{id}
    */
-  export namespace FindById2 {
+  export namespace FindById1 {
     export type RequestParams = {
       id: string;
     };
@@ -575,6 +626,67 @@ export namespace V1 {
   }
 
   /**
+   * @description Truyền vào URL hoặc slug video Viet69 để lấy title, mô tả, ảnh thumbnail, danh sách tag (URL và tên hiển thị), đường dẫn Google Blogger và danh sách luồng tải trực tiếp.
+   * @tags viet69
+   * @name GetVideoInfo
+   * @summary Lấy thông tin chi tiết video
+   * @request GET:/v1/viet69/video
+   */
+  export namespace GetVideoInfo {
+    export type RequestParams = {};
+    export type RequestQuery = {
+      /**
+       * URL đầy đủ hoặc slug của video Viet69
+       * @minLength 1
+       * @example "https://viet69.be/clip-hot-sinh-vien-ha-noi/"
+       */
+      video: string;
+    };
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = Viet69VideoInfoResponse;
+  }
+
+  /**
+   * @description Truyền vào số trang (page) để lấy danh sách video trên trang tương ứng của Viet69.
+   * @tags viet69
+   * @name GetVideosByPage
+   * @summary Lấy danh sách video theo trang
+   * @request GET:/v1/viet69/page
+   */
+  export namespace GetVideosByPage {
+    export type RequestParams = {};
+    export type RequestQuery = {
+      /**
+       * Số trang cần lấy danh sách video
+       * @format int32
+       * @min 0
+       * @default 1
+       * @example 1
+       */
+      page?: number;
+    };
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = Viet69PageResponse;
+  }
+
+  /**
+   * @description Kiểm tra tồn tại theo slug. Nếu chưa tồn tại, tải chất lượng cao nhất (song song N luồng), tách thành các file nhỏ HLS fMP4 (init.mp4 + seg_XXXX.m4s + index.m3u8) thuần Java không cần ffmpeg, upload toàn bộ cùng thumbnail vào 1 GitHub repository ngẫu nhiên theo đường dẫn slug trong 1 commit duy nhất và lưu vào hệ thống với type HUB_SERVER_M3U8_CUSTOM_DOMAIN và GOOGLE.
+   * @tags X-video manage
+   * @name ImportFromViet69
+   * @summary Import video từ slug Viet69 sang HLS fMP4 (.m3u8) trên GitHub & lưu hệ thống
+   * @request POST:/v1/api/viet69/import
+   */
+  export namespace ImportFromViet69 {
+    export type RequestParams = {};
+    export type RequestQuery = {};
+    export type RequestBody = Viet69ImportRequest;
+    export type RequestHeaders = {};
+    export type ResponseBody = Viet69ImportResponse;
+  }
+
+  /**
    * @description Xác thực tài khoản bằng username/email + password. Nếu truyền serviceCode, token sẽ tự động resolve role của service đó (nếu là SuperAdmin sẽ luôn có quyền tối cao SUPER_ADMIN).
    * @tags account
    * @name Login
@@ -716,7 +828,7 @@ export namespace V1 {
   export namespace Save {
     export type RequestParams = {};
     export type RequestQuery = {};
-    export type RequestBody = VideoSexRemoteGitlabVideoUrlEntity;
+    export type RequestBody = VideoUrlSaveRequest;
     export type RequestHeaders = {};
     export type ResponseBody = string;
   }
@@ -768,7 +880,7 @@ export namespace V1 {
   export namespace Update {
     export type RequestParams = {};
     export type RequestQuery = {};
-    export type RequestBody = CategoryEntity;
+    export type RequestBody = CategoryUpsertRequest;
     export type RequestHeaders = {};
     export type ResponseBody = boolean;
   }
@@ -783,9 +895,9 @@ export namespace V1 {
   export namespace UpdateImageUrl {
     export type RequestParams = {};
     export type RequestQuery = {};
-    export type RequestBody = UpdateImageUrlRequest;
+    export type RequestBody = UpdateVideoImageUrlRequest;
     export type RequestHeaders = {};
-    export type ResponseBody = VideoSexRemoteGitlabEntity;
+    export type ResponseBody = UpdateVideoImageUrlResponse;
   }
 
   /**
@@ -835,9 +947,9 @@ export namespace V1 {
   export namespace Upsert {
     export type RequestParams = {};
     export type RequestQuery = {};
-    export type RequestBody = CategoryEntity;
+    export type RequestBody = CategoryUpsertRequest;
     export type RequestHeaders = {};
-    export type ResponseBody = object;
+    export type ResponseBody = Record<string, number>;
   }
 
   /**
