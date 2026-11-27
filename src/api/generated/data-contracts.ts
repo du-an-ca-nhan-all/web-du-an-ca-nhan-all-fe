@@ -1,0 +1,1271 @@
+/* eslint-disable */
+/* tslint:disable */
+// @ts-nocheck
+/*
+ * ---------------------------------------------------------------
+ * ## THIS FILE WAS GENERATED VIA SWAGGER-TYPESCRIPT-API        ##
+ * ##                                                           ##
+ * ## AUTHOR: acacode                                           ##
+ * ## SOURCE: https://github.com/acacode/swagger-typescript-api ##
+ * ---------------------------------------------------------------
+ */
+
+/** Thông tin phản hồi tài khoản */
+export interface AccountResponse {
+  /**
+   * Thời gian tạo
+   * @format date-time
+   */
+  createdAt?: string;
+  /**
+   * Email
+   * @example "vana@example.com"
+   */
+  email?: string;
+  /**
+   * Họ và tên
+   * @example "Nguyễn Văn A"
+   */
+  fullName?: string;
+  /**
+   * ID tài khoản
+   * @format int64
+   * @example 1
+   */
+  id?: number;
+  /**
+   * Cờ đánh dấu tài khoản Super Admin duy nhất
+   * @example false
+   */
+  isSuperAdmin?: boolean;
+  /** Danh sách vai trò của tài khoản theo từng dịch vụ: { serviceCode: role } */
+  serviceRoles?: Record<string, string>;
+  /**
+   * Trạng thái tài khoản
+   * @example "ACTIVE"
+   */
+  status?: string;
+  /**
+   * Tên đăng nhập
+   * @example "nguyen_van_a"
+   */
+  username?: string;
+}
+
+/** Yêu cầu gán vai trò cho tài khoản trên một dịch vụ cụ thể */
+export interface AssignRoleRequest {
+  /**
+   * Vai trò muốn gán (ADMIN, MODERATOR, VIP, USER, ...)
+   * @minLength 1
+   * @example "VIP"
+   */
+  role: string;
+  /**
+   * Mã dịch vụ
+   * @minLength 1
+   * @example "VIDEOS_MANAGE"
+   */
+  serviceCode: string;
+}
+
+export interface AssignServiceRoleParams {
+  /**
+   * ID tài khoản
+   * @format int64
+   * @example 1
+   */
+  id: number;
+}
+
+/** Thông tin phản hồi đăng nhập thành công kèm Access Token */
+export interface AuthResponse {
+  /**
+   * JWT Access Token
+   * @example "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   */
+  accessToken?: string;
+  /** Thông tin chi tiết tài khoản */
+  account?: AccountResponse;
+  /**
+   * Vai trò của tài khoản trong dịch vụ hiện tại (nếu là SuperAdmin luôn là SUPER_ADMIN)
+   * @example "VIP"
+   */
+  currentRole?: string;
+  /**
+   * Dịch vụ hiện tại đã yêu cầu khi login (nếu có)
+   * @example "VIDEOS_MANAGE"
+   */
+  currentService?: string;
+  /**
+   * Thời gian hết hạn tính bằng giây
+   * @format int64
+   * @example 86400
+   */
+  expiresIn?: number;
+  /**
+   * Loại Token
+   * @example "Bearer"
+   */
+  tokenType?: string;
+}
+
+export interface Author {
+  name?: string;
+  url?: string;
+}
+
+export interface CategoriesAllParams {
+  /** @default "en" */
+  lang?: string;
+}
+
+export interface CategoriesDto {
+  id?: string;
+  name?: string;
+  urlImage?: string;
+}
+
+export interface CategoriesParams {
+  categories: string;
+  /** @default "en" */
+  lang?: string;
+  /**
+   * @format int32
+   * @default 1
+   */
+  page?: number;
+  /** @default "relevance" */
+  sort?: string;
+}
+
+export interface CategoryEntity {
+  categoryId?: string;
+  categoryTypeId?: string;
+  describe?: string;
+  name?: string;
+  totalUse?: string;
+}
+
+export interface CategoryServiceModel {
+  categoryId?: string;
+  categoryTypeId?: string;
+  describe?: string;
+  name?: string;
+  totalUse?: string;
+}
+
+export interface CommentDto {
+  comment?: string;
+  /** @format int32 */
+  createDate?: number;
+  /** @format int32 */
+  like?: number;
+  nameUser?: string;
+  thumbUrlUser?: string;
+}
+
+export interface ConfigureDefaultRepoParams {
+  /**
+   * Tên organization sở hữu repo
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org: string;
+  /**
+   * Tên repository cần cấu hình mặc định
+   * @example "my-repo"
+   */
+  repo: string;
+}
+
+export interface CountParams {
+  category: string;
+}
+
+export interface CreateForkRepositoryParams {
+  /**
+   * Tên organization nhận bản fork (khớp với OrganizationRepo)
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org: string;
+}
+
+export interface CreateRepositoryParams {
+  /**
+   * Tên organization sở hữu (khớp với OrganizationRepo)
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org: string;
+}
+
+export interface DeleteParams {
+  videoId: string;
+  videoType: string;
+}
+
+export interface DeleteRootDomainParams {
+  /**
+   * ID của root domain cần xoá
+   * @format int64
+   * @example 1
+   */
+  id: number;
+}
+
+export interface ExistsByIdParams {
+  id: string;
+}
+
+export interface FindById1Params {
+  /** @default true */
+  findSubVideo?: boolean;
+  id: string;
+  requireVideoType?: string;
+}
+
+export interface FindById2Params {
+  id: string;
+}
+
+export interface FindNotHaveTypeParams {
+  /**
+   * @format int32
+   * @default 10
+   */
+  limit?: number;
+  /**
+   * @format int32
+   * @default 0
+   */
+  page?: number;
+  type: string;
+}
+
+export interface FindRandomParams {
+  requireVideoType?: string;
+}
+
+export interface FindTypeParams {
+  /**
+   * @format int32
+   * @default 10
+   */
+  limit?: number;
+  /**
+   * @format int32
+   * @default 0
+   */
+  page?: number;
+  type: string;
+}
+
+export interface GetAccountByIdParams {
+  /**
+   * ID tài khoản
+   * @format int64
+   * @example 1
+   */
+  id: number;
+}
+
+export interface GetCommitsSummaryParams {
+  /**
+   * Repository cụ thể cần kiểm tra (owner/repo). Nếu bỏ trống sẽ kiểm tra toàn bộ danh sách repositories đã cấu hình.
+   * @example "ABaiSt3LG9ALGNJD/jjjeJ4d8fsEc5M7g"
+   */
+  repository?: string;
+}
+
+export interface GetFileMetadataParams {
+  path: string;
+  /**
+   * Repository theo định dạng 'owner/repo'
+   * @example "ABaiSt3LG9ALGNJD/jjjeJ4d8fsEc5M7g"
+   */
+  repository?: string;
+}
+
+export interface GetOrganizationParams {
+  /**
+   * Tên / mã organization cần tìm
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org: string;
+}
+
+export interface GetRepositoriesByOrgParams {
+  /**
+   * Tên organization cần truy vấn
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org: string;
+}
+
+export interface GetServiceRolesCatalogParams {
+  /**
+   * Mã dịch vụ (bỏ trống để lấy tất cả)
+   * @example "VIDEOS_MANAGE"
+   */
+  serviceCode?: string;
+}
+
+export interface GitHubCommitInfo {
+  /**
+   * Commit HTML URL
+   * @example "https://github.com/octocat/hello-world/commit/7638417db6d59f3c431d3e1f261cc637155684cd"
+   */
+  html_url?: string;
+  /**
+   * Commit message
+   * @example "Upload sample.txt via API"
+   */
+  message?: string;
+  /**
+   * Commit SHA
+   * @example "7638417db6d59f3c431d3e1f261cc637155684cd"
+   */
+  sha?: string;
+}
+
+export interface GitHubCreateForkRepoRequest {
+  /**
+   * Chỉ fork nhánh mặc định (default branch). Mặc định true để tối ưu tốc độ và dung lượng.
+   * @example true
+   */
+  defaultBranchOnly?: boolean;
+  /**
+   * Domain tùy chỉnh gắn với repository này (lưu vào database bảng repositories)
+   * @example "https://cdn.example.com"
+   */
+  domain?: string;
+  /**
+   * Tên repository mới do bạn tự đặt cho bản fork
+   * @minLength 1
+   * @pattern ^[a-zA-Z0-9_.-]+$
+   * @example "my-kafka-broker"
+   */
+  name: string;
+  /**
+   * URL hoặc slug repository gốc cần fork. Mặc định là 'https://github.com/apache/kafka'
+   * @example "https://github.com/apache/kafka"
+   */
+  sourceRepo?: string;
+}
+
+export interface GitHubCreateRepoRequest {
+  /**
+   * Tự động tạo commit khởi tạo kèm file README (dùng khi type = BLANK). Mặc định true.
+   * @example true
+   */
+  autoInit?: boolean;
+  /**
+   * Chỉ fork nhánh mặc định (dùng khi type = FORK). Mặc định true.
+   * @example true
+   */
+  defaultBranchOnly?: boolean;
+  /**
+   * Mô tả của repository (dùng khi type = BLANK)
+   * @example "Mô tả repo"
+   */
+  description?: string;
+  /**
+   * Domain tùy chỉnh gắn với repository này để lưu vào database
+   * @example "https://cdn.example.com"
+   */
+  domain?: string;
+  /**
+   * Mẫu .gitignore (ví dụ: 'Java', 'Node', 'Python', v.v., dùng khi type = BLANK)
+   * @example "Java"
+   */
+  gitignoreTemplate?: string;
+  /**
+   * Chế độ riêng tư (private hay public, dùng khi type = BLANK). Mặc định false.
+   * @example false
+   */
+  isPrivate?: boolean;
+  /**
+   * Mẫu License (ví dụ: 'mit', 'apache-2.0', v.v., dùng khi type = BLANK)
+   * @example "mit"
+   */
+  licenseTemplate?: string;
+  /**
+   * Tên repository cần tạo mới
+   * @minLength 1
+   * @pattern ^[a-zA-Z0-9_.-]+$
+   * @example "my-custom-repo"
+   */
+  name: string;
+  /**
+   * Nội dung tùy chỉnh cho file README.md (dùng khi type = BLANK)
+   * @example "# Project Readme"
+   */
+  readmeContent?: string;
+  /**
+   * URL hoặc slug repository gốc cần fork (dùng khi type = FORK). Mặc định 'https://github.com/apache/kafka'
+   * @example "https://github.com/apache/kafka"
+   */
+  sourceRepo?: string;
+  /**
+   * Loại tạo repo: BLANK (repo trắng có readme/gitignore/license) hoặc FORK (fork từ repo khác, mặc định apache/kafka). Mặc định BLANK.
+   * @example "BLANK"
+   */
+  type?: GitHubCreateRepoRequestTypeEnum;
+}
+
+/**
+ * Loại tạo repo: BLANK (repo trắng có readme/gitignore/license) hoặc FORK (fork từ repo khác, mặc định apache/kafka). Mặc định BLANK.
+ * @example "BLANK"
+ */
+export enum GitHubCreateRepoRequestTypeEnum {
+  BLANK = "BLANK",
+  FORK = "FORK",
+}
+
+export interface GitHubCreateRepoResponse {
+  /**
+   * URL clone Git qua HTTPS
+   * @example "https://github.com/ABaiSt3LG9ALGNJD/my-blank-repo.git"
+   */
+  cloneUrl?: string;
+  /**
+   * Thời gian tạo
+   * @format date-time
+   * @example "2026-11-12T19:42:13+07:00"
+   */
+  createdAt?: string;
+  /**
+   * ID bản ghi trong bảng cơ sở dữ liệu github_upload.repositories
+   * @format int64
+   * @example 1
+   */
+  dbId?: number;
+  /**
+   * Nhánh mặc định của repository
+   * @example "main"
+   */
+  defaultBranch?: string;
+  /**
+   * Mô tả repository
+   * @example "Kho lưu trữ dữ liệu trống với tài liệu README"
+   */
+  description?: string;
+  /**
+   * Domain tùy chỉnh gắn với repository
+   * @example "https://cdn.example.com"
+   */
+  domain?: string;
+  /**
+   * Slug đầy đủ dạng 'owner/repo'
+   * @example "ABaiSt3LG9ALGNJD/my-blank-repo"
+   */
+  fullRepository?: string;
+  /**
+   * URL Git SSH / protocol
+   * @example "git://github.com/ABaiSt3LG9ALGNJD/my-blank-repo.git"
+   */
+  gitUrl?: string;
+  /**
+   * URL giao diện GitHub của repository
+   * @example "https://github.com/ABaiSt3LG9ALGNJD/my-blank-repo"
+   */
+  htmlUrl?: string;
+  /**
+   * Cờ đánh dấu có phải là bản fork từ repo khác hay không
+   * @example false
+   */
+  isFork?: boolean;
+  /**
+   * Trạng thái repository là riêng tư (private) hay công khai (public)
+   * @example false
+   */
+  isPrivate?: boolean;
+  /**
+   * Thông báo kết quả xử lý
+   * @example "Tạo mới repository thành công"
+   */
+  message?: string;
+  /**
+   * Tên organization sở hữu
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org?: string;
+  /**
+   * Tên repository
+   * @example "my-blank-repo"
+   */
+  repoName?: string;
+  /**
+   * Repository gốc nguồn (nếu là bản fork)
+   * @example "apache/kafka"
+   */
+  sourceRepo?: string;
+}
+
+export interface GitHubFileContentResponse {
+  /** Base64 content if retrieved from GET endpoint */
+  content?: string;
+  /**
+   * Public domain URL (domain + path)
+   * @example "https://cdn.myhost.com/docs/sample.txt"
+   */
+  domain_url?: string;
+  /**
+   * Direct download raw URL
+   * @example "https://raw.githubusercontent.com/octocat/hello-world/main/docs/sample.txt"
+   */
+  download_url?: string;
+  /**
+   * Encoding type
+   * @example "base64"
+   */
+  encoding?: string;
+  /**
+   * Web URL on GitHub
+   * @example "https://github.com/octocat/hello-world/blob/main/docs/sample.txt"
+   */
+  html_url?: string;
+  /**
+   * File name
+   * @example "sample.txt"
+   */
+  name?: string;
+  /**
+   * Path in repository
+   * @example "docs/sample.txt"
+   */
+  path?: string;
+  /**
+   * Git blob SHA
+   * @example "3a06dc643a2269834f4710206b43d4949ac756ae"
+   */
+  sha?: string;
+  /**
+   * File size in bytes
+   * @format int64
+   * @example 1024
+   */
+  size?: number;
+}
+
+export interface GitHubPullRepoDomainResponse {
+  /**
+   * Domain hiện tại trong database sau khi pull
+   * @example "https://my-repo.quickgg.top"
+   */
+  currentDomain?: string;
+  /**
+   * Đường dẫn đầy đủ org/repo
+   * @example "ABaiSt3LG9ALGNJD/my-repo"
+   */
+  fullRepository?: string;
+  /** Thông báo kết quả */
+  message?: string;
+  /**
+   * Tên organization sở hữu repository
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org?: string;
+  /**
+   * Domain trước đó lưu trong database
+   * @example "https://old.example.com"
+   */
+  previousDomain?: string;
+  /**
+   * Domain lấy được từ GitHub (sau chuẩn hoá https://)
+   * @example "https://my-repo.quickgg.top"
+   */
+  pulledDomain?: string;
+  /**
+   * Tên repository
+   * @example "my-repo"
+   */
+  repoName?: string;
+  /**
+   * Nguồn phát hiện domain trên GitHub: GITHUB_PAGES, CNAME_FILE hoặc NONE
+   * @example "GITHUB_PAGES"
+   */
+  source?: string;
+  /** Có cập nhật dữ liệu mới vào database hay không */
+  updated?: boolean;
+}
+
+export interface GitHubRepoCommitSummaryResponse {
+  /**
+   * Tên nhánh git kiểm tra
+   * @example "main"
+   */
+  branch?: string;
+  /**
+   * Domain cấu hình
+   * @example "https://cdn1.example.com"
+   */
+  domain?: string;
+  /**
+   * SHA của commit mới nhất (HEAD)
+   * @example "7638417db6d59f3c431d3e1f261cc637155684cd"
+   */
+  latestCommitSha?: string;
+  /**
+   * Repository slug (owner/repo)
+   * @example "ABaiSt3LG9ALGNJD/jjjeJ4d8fsEc5M7g"
+   */
+  repository?: string;
+  /**
+   * Số lượng commit hiện tại trên nhánh
+   * @format int64
+   * @example 42
+   */
+  totalCommits?: number;
+}
+
+export interface GitHubRepoDefaultConfigRequest {
+  /**
+   * Tên root domain trong bảng github_upload.root_domains (ví dụ: quickgg.top). Dùng khi không truyền rootDomainId.
+   * @example "quickgg.top"
+   */
+  rootDomain?: string;
+  /**
+   * ID của root domain trong bảng github_upload.root_domains (ưu tiên nếu truyền cả id và domain)
+   * @format int64
+   * @example 1
+   */
+  rootDomainId?: number;
+}
+
+export interface GitHubRepoDefaultConfigResponse {
+  /** Đã đảm bảo trang 404.html trên branch cấu hình */
+  page404Ready?: boolean;
+  /**
+   * Nhánh được cấu hình (theo github.upload.branch)
+   * @example "upload"
+   */
+  branch?: string;
+  /**
+   * Nội dung file CNAME đã tạo (repoName.rootDomain)
+   * @example "my-repo.quickgg.top"
+   */
+  cname?: string;
+  /** Đã tạo/cập nhật file CNAME trên branch cấu hình */
+  cnameConfigured?: boolean;
+  /**
+   * URL đầy đủ được lưu vào bảng repositories
+   * @example "https://my-repo.quickgg.top"
+   */
+  domainUrl?: string;
+  /**
+   * Đường dẫn đầy đủ org/repo
+   * @example "ABaiSt3LG9ALGNJD/my-repo"
+   */
+  fullRepository?: string;
+  /** Đã bật/cập nhật cấu hình GitHub Pages trỏ vào branch cấu hình */
+  githubPagesConfigured?: boolean;
+  /** Thông báo kết quả */
+  message?: string;
+  /**
+   * Tên organization sở hữu repository
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org?: string;
+  /**
+   * Tên repository
+   * @example "my-repo"
+   */
+  repoName?: string;
+  /**
+   * Root domain đã chọn
+   * @example "quickgg.top"
+   */
+  rootDomain?: string;
+}
+
+export interface GitHubRootDomainRequest {
+  /**
+   * Mô tả cho root domain
+   * @example "Default root domain"
+   */
+  description?: string;
+  /**
+   * Root domain dùng để gắn CNAME cho GitHub Pages (ví dụ: quickgg.top)
+   * @minLength 1
+   * @example "quickgg.top"
+   */
+  domain: string;
+}
+
+export interface GitHubSquashCommitsResponse {
+  /**
+   * Tên nhánh git sau khi gộp
+   * @example "main"
+   */
+  branch?: string;
+  /**
+   * Số lượng commit sau khi gộp (luôn là 2 commit duy nhất)
+   * @format int32
+   * @example 2
+   */
+  currentCommitsCount?: number;
+  /**
+   * SHA của commit HEAD gộp toàn bộ dữ liệu (Squashed State Commit)
+   * @example "9f8e7d6c5b..."
+   */
+  headCommitSha?: string;
+  /**
+   * Thông báo kết quả gộp
+   * @example "Successfully squashed repository history into exactly 2 commits while preserving all files."
+   */
+  message?: string;
+  /**
+   * Số lượng commit trước khi gộp
+   * @format int64
+   * @example 42
+   */
+  previousCommitsCount?: number;
+  /**
+   * Repository slug (owner/repo)
+   * @example "ABaiSt3LG9ALGNJD/jjjeJ4d8fsEc5M7g"
+   */
+  repository?: string;
+  /**
+   * SHA của commit gốc khởi tạo (Initial Root Commit)
+   * @example "1a2b3c4d5e..."
+   */
+  rootCommitSha?: string;
+}
+
+export interface GitHubUploadResponse {
+  /** Commit details created on GitHub */
+  commit?: GitHubCommitInfo;
+  /** Uploaded file metadata */
+  content?: GitHubFileContentResponse;
+}
+
+/** Yêu cầu đăng nhập tài khoản */
+export interface LoginRequest {
+  /**
+   * Mật khẩu
+   * @minLength 1
+   * @example "SecurePassword123!"
+   */
+  password: string;
+  /**
+   * Mã dịch vụ / ứng dụng đang gọi đăng nhập (để cấp role cụ thể trong token)
+   * @example "VIDEOS_MANAGE"
+   */
+  serviceCode?: string;
+  /**
+   * Tên đăng nhập hoặc Email
+   * @minLength 1
+   * @example "nguyen_van_a"
+   */
+  usernameOrEmail: string;
+}
+
+export interface MenuParams {
+  /** @default "domain" */
+  domain?: string;
+  /** @default "en" */
+  lang?: string;
+  /**
+   * @format int32
+   * @default 8
+   */
+  size?: number;
+}
+
+export interface NewVideo1Params {
+  /**
+   * @format int32
+   * @default 1
+   */
+  page?: number;
+}
+
+export interface NewVideoParams {
+  /**
+   * @format int32
+   * @default 10
+   */
+  limit?: number;
+  /**
+   * @format int32
+   * @default 0
+   */
+  page?: number;
+  requireVideoType?: string;
+}
+
+export interface OrganizationEntity {
+  /** @format date-time */
+  createdAt?: string;
+  description?: string;
+  name?: string;
+  org?: string;
+}
+
+export interface PageResponseBEListVideoDto {
+  data?: VideoDto[];
+  paging?: Paging;
+}
+
+export interface PageVideoSexRemoteGitlabServiceModel {
+  content?: VideoSexRemoteGitlabServiceModel[];
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  /** @format int32 */
+  number?: number;
+  /** @format int32 */
+  numberOfElements?: number;
+  pageable?: PageableObject;
+  /** @format int32 */
+  size?: number;
+  sort?: SortObject;
+  /** @format int64 */
+  totalElements?: number;
+  /** @format int32 */
+  totalPages?: number;
+}
+
+export interface PageVideoUrlDecodeWithIdModel {
+  content?: VideoUrlDecodeWithIdModel[];
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  /** @format int32 */
+  number?: number;
+  /** @format int32 */
+  numberOfElements?: number;
+  pageable?: PageableObject;
+  /** @format int32 */
+  size?: number;
+  sort?: SortObject;
+  /** @format int64 */
+  totalElements?: number;
+  /** @format int32 */
+  totalPages?: number;
+}
+
+export interface PageableObject {
+  /** @format int64 */
+  offset?: number;
+  /** @format int32 */
+  pageNumber?: number;
+  /** @format int32 */
+  pageSize?: number;
+  paged?: boolean;
+  sort?: SortObject;
+  unpaged?: boolean;
+}
+
+export interface Paging {
+  /** @format int32 */
+  maxPage?: number;
+}
+
+export interface PostgresBackupResult {
+  branch?: string;
+  commitSha?: string;
+  /** @format date-time */
+  completedAt?: string;
+  engine?: string;
+  fileDownloadUrl?: string;
+  fileName?: string;
+  /** @format int64 */
+  fileSizeBytes?: number;
+  message?: string;
+  repository?: string;
+  schemas?: string[];
+  success?: boolean;
+}
+
+export interface Proxy1Params {
+  /** @default "https://example.com" */
+  url?: string;
+}
+
+/** @format byte */
+export type Proxy1Payload = Blob;
+
+export interface Proxy2Params {
+  /** @default "https://example.com" */
+  url?: string;
+}
+
+/** @format byte */
+export type Proxy2Payload = Blob;
+
+export interface Proxy3Params {
+  /** @default "https://example.com" */
+  url?: string;
+}
+
+/** @format byte */
+export type Proxy3Payload = Blob;
+
+export interface Proxy4Params {
+  /** @default "https://example.com" */
+  url?: string;
+}
+
+/** @format byte */
+export type Proxy4Payload = Blob;
+
+export interface Proxy5Params {
+  /** @default "https://example.com" */
+  url?: string;
+}
+
+/** @format byte */
+export type Proxy5Payload = Blob;
+
+export interface Proxy6Params {
+  /** @default "https://example.com" */
+  url?: string;
+}
+
+/** @format byte */
+export type Proxy6Payload = Blob;
+
+export interface ProxyParams {
+  /** @default "https://example.com" */
+  url?: string;
+}
+
+/** @format byte */
+export type ProxyPayload = Blob;
+
+export interface PullOrgRepoDomainsParams {
+  /**
+   * Tên organization cần đồng bộ domain
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org: string;
+}
+
+export interface PullRepoDomainParams {
+  /**
+   * Tên organization sở hữu repo
+   * @example "ABaiSt3LG9ALGNJD"
+   */
+  org: string;
+  /**
+   * Tên repository cần pull domain
+   * @example "my-repo"
+   */
+  repo: string;
+}
+
+/** Yêu cầu đăng ký tài khoản mới */
+export interface RegisterRequest {
+  /**
+   * Email (tùy chọn)
+   * @format email
+   * @example "vana@example.com"
+   */
+  email?: string;
+  /**
+   * Họ và tên đầy đủ
+   * @example "Nguyễn Văn A"
+   */
+  fullName?: string;
+  /**
+   * Mật khẩu (ít nhất 6 ký tự)
+   * @minLength 6
+   * @maxLength 100
+   * @example "SecurePassword123!"
+   */
+  password: string;
+  /**
+   * Mã service ban đầu muốn gán quyền (mặc định role USER nếu bỏ trống)
+   * @example "GLOBAL_PORTAL"
+   */
+  serviceCode?: string;
+  /**
+   * Tên đăng nhập (4-50 ký tự)
+   * @minLength 4
+   * @maxLength 50
+   * @example "nguyen_van_a"
+   */
+  username: string;
+}
+
+export interface RemoveServiceRoleParams {
+  /**
+   * ID tài khoản
+   * @format int64
+   * @example 1
+   */
+  id: number;
+  /**
+   * Mã dịch vụ
+   * @example "VIDEOS_MANAGE"
+   */
+  serviceCode: string;
+}
+
+export interface RepositoryEntity {
+  /** @format date-time */
+  createdAt?: string;
+  domain?: string;
+  fullRepository?: string;
+  /** @format int64 */
+  id?: number;
+  org?: string;
+  repoName?: string;
+}
+
+export interface Request {
+  m3u8url?: string;
+  categoryServiceModels?: CategoryServiceModel[];
+  description?: string;
+  googleUrl?: string;
+  id?: string;
+  imageUrl?: string;
+  name?: string;
+}
+
+export interface RootDomainEntity {
+  /** @format date-time */
+  createdAt?: string;
+  description?: string;
+  domain?: string;
+  /** @format int64 */
+  id?: number;
+}
+
+export interface Search1Params {
+  /** @default "en" */
+  lang?: string;
+  /**
+   * @format int32
+   * @default 1
+   */
+  page?: number;
+  search: string;
+  /** @default "relevance" */
+  sort?: string;
+}
+
+export interface SearchParams {
+  /**
+   * @format int32
+   * @default 1
+   */
+  page?: number;
+  search: string;
+  /** @default "relevance" */
+  sort?: string;
+}
+
+/** Danh sách các role được định nghĩa theo từng service và role toàn cục */
+export interface ServiceRolesCatalogResponse {
+  /**
+   * Role toàn cục duy nhất áp dụng cho mọi service
+   * @example "SUPER_ADMIN"
+   */
+  globalRole?: string;
+  /** Danh sách role theo từng mã service */
+  serviceRoles?: Record<string, string[]>;
+}
+
+export interface SortObject {
+  empty?: boolean;
+  sorted?: boolean;
+  unsorted?: boolean;
+}
+
+export interface SquashCommitsParams {
+  /**
+   * Repository cần gộp (owner/repo). Nếu bỏ trống sẽ tự động chọn ngẫu nhiên từ danh sách cấu hình.
+   * @example "ABaiSt3LG9ALGNJD/jjjeJ4d8fsEc5M7g"
+   */
+  repository?: string;
+}
+
+export interface TagDto {
+  id?: string;
+  name?: string;
+}
+
+export interface TagParams {
+  /**
+   * @format int32
+   * @default 1
+   */
+  page?: number;
+  /** @default "uploaddate" */
+  sort?: string;
+  tag: string;
+}
+
+export interface TagsParams {
+  /** @default "en" */
+  lang?: string;
+  /**
+   * @format int32
+   * @default 1
+   */
+  page?: number;
+  tag: string;
+}
+
+export interface UpdateImageUrlRequest {
+  id?: string;
+  imageUrl?: string;
+}
+
+export interface UploadFileParams {
+  /**
+   * Commit message mô tả lần tải lên
+   * @example "Upload image via API"
+   */
+  commitMessage?: string;
+  /**
+   * Thư mục lưu trữ trên repo (ví dụ: 'assets/images' hoặc để trống lưu tại root)
+   * @example "assets/images"
+   */
+  path?: string;
+  /**
+   * Cờ cho phép tạo tên file ngẫu nhiên (prefix ngày giờ phút giây yyyyMMddHHmmss + random uuid) tránh trùng lặp
+   * @default false
+   * @example false
+   */
+  randomFileName?: boolean;
+  /**
+   * Repository đích theo định dạng 'owner/repo'. Nếu để trống hoặc null sẽ tự động random chọn 1 repo trong cấu hình.
+   * @example "ABaiSt3LG9ALGNJD/jjjeJ4d8fsEc5M7g"
+   */
+  repository?: string;
+}
+
+export interface UploadFilePayload {
+  /** @format binary */
+  file: File;
+}
+
+export interface UrlVideoDto {
+  urlVideo?: string;
+}
+
+export interface Video1Params {
+  id: string;
+  /** @default "en" */
+  lang?: string;
+}
+
+export interface VideoByCategoryParams {
+  category: string;
+  /**
+   * @format int32
+   * @default 10
+   */
+  limit?: number;
+  /**
+   * @format int32
+   * @default 0
+   */
+  page?: number;
+  requireVideoType?: string;
+}
+
+export interface VideoDetailDto {
+  top20comments?: CommentDto[];
+  id?: string;
+  like?: string;
+  min?: string;
+  name?: string;
+  tags?: TagDto[];
+  urlImage?: string;
+  urlVideo?: string;
+  videos?: VideoDto[];
+  viewNumber?: string;
+}
+
+export interface VideoDto {
+  author?: Author;
+  id?: string;
+  min?: string;
+  name?: string;
+  nameUrl?: string;
+  quality?: string;
+  urlImage?: string;
+  urmPreview?: string;
+  viewNumber?: string;
+}
+
+export interface VideoInfoDto {
+  id?: string;
+  name?: string;
+  tags?: string[];
+  urlImage?: string;
+  videoUrls?: VideoXvideosUrl[];
+  videos?: VideoDto[];
+}
+
+export interface VideoInfoParams {
+  id: string;
+}
+
+export interface VideoParams {
+  id: string;
+}
+
+export interface VideoSexRemoteGitlabEntity {
+  m3u8Url?: string;
+  /** @format date-time */
+  dateCreate?: string;
+  /** @format int32 */
+  deploy?: number;
+  describe?: string;
+  id?: string;
+  imageUrl?: string;
+  title?: string;
+}
+
+export interface VideoSexRemoteGitlabServiceModel {
+  m3u8Url?: string;
+  categoryes?: CategoryServiceModel[];
+  /** @format date-time */
+  dateCreate?: string;
+  describe?: string;
+  id?: string;
+  imageUrl?: string;
+  title?: string;
+  videoTypes?: VideoTypeServiceModel[];
+}
+
+export interface VideoSexRemoteGitlabVideoUrlEntity {
+  extraData?: string;
+  /** @format int32 */
+  id?: number;
+  idVideo?: string;
+  typeVideoUrl?: string;
+  urlVideo?: string;
+}
+
+export interface VideoTypeServiceModel {
+  name?: string;
+  nameEncode?: string;
+  nameUrl?: string;
+  videoTypeId?: string;
+}
+
+export interface VideoUrlDecodeModel {
+  type?: string;
+  urlVideo?: string;
+}
+
+export interface VideoUrlDecodeWithIdModel {
+  id?: string;
+  type?: string;
+  urlVideo?: string;
+}
+
+export interface VideoUrlParams {
+  id: string;
+}
+
+export interface VideoXvideosUrl {
+  label?: string;
+  type?: string;
+  url?: string;
+}
