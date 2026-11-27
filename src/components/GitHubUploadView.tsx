@@ -10,6 +10,7 @@ import {
   ExternalLink,
   GitFork,
   Globe,
+  KeyRound,
   Loader2,
   RefreshCw,
   RotateCcw,
@@ -28,6 +29,7 @@ import {
   type GitHubCreateForkRepoRequest,
   type GitHubCreateRepoResponse,
   type GitHubPullRepoDomainResponse,
+  type GitHubTokenResponse,
   type OrganizationEntity,
   type RepositoryEntity,
   type RootDomainEntity,
@@ -38,6 +40,7 @@ import { formatDateTime, formatShortDate, generateRandomRepoName } from '../util
 import { BatchDefaultConfigModal } from './github/BatchDefaultConfigModal';
 import { DefaultConfigModal, type DefaultConfigTarget } from './github/DefaultConfigModal';
 import { RootDomainsPanel } from './github/RootDomainsPanel';
+import { TokensPanel } from './github/TokensPanel';
 import { UploadFilePanel } from './github/UploadFilePanel';
 
 const DEFAULT_SOURCE_REPO = 'https://github.com/apache/kafka';
@@ -71,7 +74,7 @@ interface GitHubUploadViewProps {
   onAuthFailure: (message: string) => void;
 }
 
-type GitHubSubTab = 'repositories' | 'upload' | 'root-domains';
+type GitHubSubTab = 'repositories' | 'upload' | 'root-domains' | 'tokens';
 
 export function GitHubUploadView({ onAuthFailure }: GitHubUploadViewProps) {
   const { serverConfig } = useAuth();
@@ -103,6 +106,12 @@ export function GitHubUploadView({ onAuthFailure }: GitHubUploadViewProps) {
   const [rootDomains, setRootDomains] = useState<RootDomainEntity[]>([]);
   const [rootDomainsLoading, setRootDomainsLoading] = useState(true);
   const [rootDomainsError, setRootDomainsError] = useState<string | null>(null);
+
+  // GitHub tokens loaded from GET /v1/github/tokens
+  const [tokens, setTokens] = useState<GitHubTokenResponse[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [tokensError, setTokensError] = useState<string | null>(null);
+  const [superTokenOnly, setSuperTokenOnly] = useState(false);
 
   // Pull domain config states
   const [pullingOrg, setPullingOrg] = useState(false);
@@ -222,6 +231,30 @@ export function GitHubUploadView({ onAuthFailure }: GitHubUploadViewProps) {
       setRootDomainsLoading(false);
     }
   }, [v1, serverConfig.useProxy, onAuthFailure]);
+
+  const loadTokens = useCallback(async () => {
+    setTokensLoading(true);
+    setTokensError(null);
+    try {
+      const list = await executeApi(
+        v1.getAllTokens({ superTokenOnly }),
+        serverConfig.useProxy
+      );
+      setTokens(Array.isArray(list) ? list : []);
+    } catch (err) {
+      if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+        onAuthFailure(err.message);
+        return;
+      }
+      setTokensError(
+        err instanceof ApiClientError
+          ? err.message
+          : 'Không thể tải danh sách GitHub token từ máy chủ.'
+      );
+    } finally {
+      setTokensLoading(false);
+    }
+  }, [v1, superTokenOnly, serverConfig.useProxy, onAuthFailure]);
 
   const loadRepos = useCallback(
     async (scope: 'org' | 'all', orgName: string) => {
@@ -373,6 +406,10 @@ export function GitHubUploadView({ onAuthFailure }: GitHubUploadViewProps) {
     void loadOrganizations();
     void loadRootDomains();
   }, [loadOrganizations, loadRootDomains]);
+
+  useEffect(() => {
+    void loadTokens();
+  }, [loadTokens]);
 
   useEffect(() => {
     if (repoScope === 'org' && !activeOrg) {
@@ -773,10 +810,22 @@ export function GitHubUploadView({ onAuthFailure }: GitHubUploadViewProps) {
             <Globe className="h-3.5 w-3.5" />
             Root Domains ({rootDomains.length})
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('tokens')}
+            className={`inline-flex items-center gap-2 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+              activeTab === 'tokens'
+                ? 'bg-white dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <KeyRound className="h-3.5 w-3.5" />
+            Tokens &amp; Import Org ({tokens.length})
+          </button>
         </div>
 
         <p className="font-mono text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
-          {organizations.length} Organization · {rootDomains.length} Root Domain
+          {organizations.length} Organization · {rootDomains.length} Root Domain · {tokens.length} Token
         </p>
       </div>
 
@@ -792,6 +841,19 @@ export function GitHubUploadView({ onAuthFailure }: GitHubUploadViewProps) {
           loading={rootDomainsLoading}
           error={rootDomainsError}
           onRefresh={() => void loadRootDomains()}
+          onAuthFailure={onAuthFailure}
+        />
+      ) : activeTab === 'tokens' ? (
+        <TokensPanel
+          tokens={tokens}
+          loading={tokensLoading}
+          error={tokensError}
+          superTokenOnly={superTokenOnly}
+          onSuperTokenOnlyChange={setSuperTokenOnly}
+          onRefresh={() => void loadTokens()}
+          onOrganizationsImported={() => {
+            void loadOrganizations();
+          }}
           onAuthFailure={onAuthFailure}
         />
       ) : (

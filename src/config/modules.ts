@@ -60,7 +60,7 @@ export const ADMIN_MODULES: AdminModuleDefinition[] = [
     label: 'GitHub Upload',
     breadcrumb: 'Hệ sinh thái / GitHub Upload',
     description:
-      'Tạo repository từ bản fork, tải file lên GitHub nhận link truy cập công khai, quản lý Root Domain, chạy Default Config và Pull đồng bộ domain.',
+      'Tạo repository từ bản fork, tải file lên GitHub nhận link truy cập công khai, quản lý Root Domain, GitHub Token, Import Organization, chạy Default Config và Pull đồng bộ domain.',
     icon: GitFork,
     status: 'active',
   },
