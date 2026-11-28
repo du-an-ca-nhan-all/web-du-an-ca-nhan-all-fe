@@ -612,6 +612,7 @@ export function GitHubUploadView({ onAuthFailure }: GitHubUploadViewProps) {
         <TokensPanel
           tokens={tokens}
           organizations={organizations}
+          repositories={repos}
           loading={tokensLoading}
           error={tokensError}
           superTokenOnly={superTokenOnly}

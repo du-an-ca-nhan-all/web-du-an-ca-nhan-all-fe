@@ -17,8 +17,8 @@ import {
   AuthResponse,
   CategoryServiceModel,
   CategoryUpsertRequest,
-  CheckTokenAccessParams,
   CheckTokenOrgAccessParams,
+  CheckTokenRepoAccessParams,
   ConfigureDefaultRepoParams,
   CountParams,
   CreateForkRepositoryParams,
@@ -61,8 +61,9 @@ import {
   GitHubRepoDefaultConfigResponse,
   GitHubRootDomainRequest,
   GitHubSquashCommitsResponse,
-  GitHubTokenAccessCheckResponse,
   GitHubTokenCreateRequest,
+  GitHubTokenOrgAccessCheckResponse,
+  GitHubTokenRepoAccessCheckResponse,
   GitHubTokenResponse,
   GitHubTokenUpdateRequest,
   GitHubUploadResponse,
@@ -159,27 +160,7 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
-   * @description Nếu không truyền org: kiểm tra token với toàn bộ organizations và repositories đang có trong DB. Nếu truyền org: chỉ kiểm tra với organization đó và các repo thuộc org đó. Yêu cầu quyền SUPER_ADMIN.
-   *
-   * @tags github-upload
-   * @name CheckTokenAccess
-   * @summary Kiểm tra quyền truy cập của token với toàn bộ hoặc 1 organization & repositories trong DB
-   * @request GET:/v1/github/tokens/{id}/check-access
-   * @secure
-   */
-  checkTokenAccess = (
-    { id, ...query }: CheckTokenAccessParams,
-    params: RequestParams = {},
-  ) =>
-    this.http.request<GitHubTokenAccessCheckResponse, any>({
-      path: `/v1/github/tokens/${id}/check-access`,
-      method: "GET",
-      query: query,
-      secure: true,
-      ...params,
-    });
-  /**
-   * @description Kiểm tra xem token (theo ID) có quyền truy cập organization chỉ định và các repository thuộc organization đó trong DB hay chưa. Yêu cầu quyền SUPER_ADMIN.
+   * @description Chỉ kiểm tra xem token (theo ID) có quyền truy cập vào organization chỉ định hay không (không kiểm tra toàn bộ). Yêu cầu quyền SUPER_ADMIN.
    *
    * @tags github-upload
    * @name CheckTokenOrgAccess
@@ -191,8 +172,27 @@ export class V1<SecurityDataType = unknown> {
     { id, org }: CheckTokenOrgAccessParams,
     params: RequestParams = {},
   ) =>
-    this.http.request<GitHubTokenAccessCheckResponse, any>({
+    this.http.request<GitHubTokenOrgAccessCheckResponse, any>({
       path: `/v1/github/tokens/${id}/organizations/${org}/check-access`,
+      method: "GET",
+      secure: true,
+      ...params,
+    });
+  /**
+   * @description Chỉ kiểm tra xem token (theo ID) có quyền truy cập và ghi (push/admin) vào repository chỉ định hay không (không kiểm tra toàn bộ). Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name CheckTokenRepoAccess
+   * @summary Kiểm tra quyền truy cập của token với 1 repository cụ thể
+   * @request GET:/v1/github/tokens/{id}/organizations/{org}/repositories/{repo}/check-access
+   * @secure
+   */
+  checkTokenRepoAccess = (
+    { id, org, repo }: CheckTokenRepoAccessParams,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubTokenRepoAccessCheckResponse, any>({
+      path: `/v1/github/tokens/${id}/organizations/${org}/repositories/${repo}/check-access`,
       method: "GET",
       secure: true,
       ...params,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Building2,
@@ -6,10 +6,12 @@ import {
   ExternalLink,
   GitFork,
   Loader2,
+  Play,
   RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
+  Square,
   X,
   XCircle,
 } from 'lucide-react';
@@ -17,143 +19,190 @@ import {
   ApiClientError,
   executeApi,
   useBackendClient,
-  type GitHubTokenAccessCheckResponse,
+  type GitHubTokenOrgAccessCheckResponse,
+  type GitHubTokenRepoAccessCheckResponse,
   type GitHubTokenResponse,
   type OrganizationEntity,
+  type RepositoryEntity,
 } from '../../api';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+
+export interface TokenAccessCheckCache {
+  orgs: Record<string, GitHubTokenOrgAccessCheckResponse>;
+  repos: Record<string, GitHubTokenRepoAccessCheckResponse>;
+}
 
 interface TokenAccessCheckModalProps {
   token: GitHubTokenResponse | null;
   organizations: OrganizationEntity[];
-  initialResult?: GitHubTokenAccessCheckResponse | null;
-  onResultUpdated?: (tokenId: string, result: GitHubTokenAccessCheckResponse) => void;
+  repositories: RepositoryEntity[];
+  initialCache?: TokenAccessCheckCache | null;
+  onCacheUpdated?: (tokenId: string, cache: TokenAccessCheckCache) => void;
   onClose: () => void;
   onAuthFailure: (message: string) => void;
 }
 
 type ResultTab = 'organizations' | 'repositories';
-type StatusFilter = 'all' | 'ok' | 'issues';
+type StatusFilter = 'all' | 'ok' | 'issues' | 'unchecked';
+
+interface NormalizedRepoTarget {
+  key: string;
+  org: string;
+  repoName: string;
+  fullRepository: string;
+}
 
 export function TokenAccessCheckModal({
   token,
   organizations,
-  initialResult,
-  onResultUpdated,
+  repositories,
+  initialCache,
+  onCacheUpdated,
   onClose,
   onAuthFailure,
 }: TokenAccessCheckModalProps) {
   const { serverConfig } = useAuth();
   const { v1 } = useBackendClient();
-
-  const [selectedOrg, setSelectedOrg] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<GitHubTokenAccessCheckResponse | null>(null);
+  const { notify } = useToast();
 
   const [activeTab, setActiveTab] = useState<ResultTab>('organizations');
+  const [selectedRepoOrg, setSelectedRepoOrg] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
 
-  const tokenId = token?.id || '';
-  const onResultUpdatedRef = useRef(onResultUpdated);
-  onResultUpdatedRef.current = onResultUpdated;
-
-  const runCheck = useCallback(
-    async (orgSlug: string) => {
-      if (!tokenId) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const trimmedOrg = orgSlug.trim();
-        const res = trimmedOrg
-          ? await executeApi(
-              v1.checkTokenOrgAccess({
-                id: encodeURIComponent(tokenId),
-                org: encodeURIComponent(trimmedOrg),
-              }),
-              serverConfig.useProxy
-            )
-          : await executeApi(
-              v1.checkTokenAccess({ id: encodeURIComponent(tokenId) }),
-              serverConfig.useProxy
-            );
-        setResult(res);
-        if (!trimmedOrg && onResultUpdatedRef.current) {
-          onResultUpdatedRef.current(tokenId, res);
-        }
-      } catch (err) {
-        if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
-          onAuthFailure(err.message);
-          return;
-        }
-        setError(
-          err instanceof ApiClientError
-            ? err.message
-            : 'Không thể kiểm tra quyền truy cập của token.'
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [tokenId, v1, serverConfig.useProxy, onAuthFailure]
+  const [orgResults, setOrgResults] = useState<Record<string, GitHubTokenOrgAccessCheckResponse>>(
+    {}
   );
+  const [repoResults, setRepoResults] = useState<
+    Record<string, GitHubTokenRepoAccessCheckResponse>
+  >({});
+
+  const [checkingOrgKey, setCheckingOrgKey] = useState<string | null>(null);
+  const [checkingRepoKey, setCheckingRepoKey] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{
+    mode: ResultTab;
+    completed: number;
+    total: number;
+    ok: number;
+    issues: number;
+  } | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const stopRef = useRef(false);
+  const mountedRef = useRef(true);
+  const onCacheUpdatedRef = useRef(onCacheUpdated);
+  onCacheUpdatedRef.current = onCacheUpdated;
+
+  const orgResultsRef = useRef(orgResults);
+  orgResultsRef.current = orgResults;
+  const repoResultsRef = useRef(repoResults);
+  repoResultsRef.current = repoResults;
+
+  const tokenId = token?.id || '';
 
   useEffect(() => {
-    if (!token) return;
-    setSelectedOrg('');
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      stopRef.current = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!tokenId) return;
+    stopRef.current = false;
+    setStopping(false);
+    setBatchProgress(null);
+    setCheckingOrgKey(null);
+    setCheckingRepoKey(null);
     setActiveTab('organizations');
+    setSelectedRepoOrg('');
     setStatusFilter('all');
     setSearch('');
     setError(null);
+    setOrgResults(initialCache?.orgs ? { ...initialCache.orgs } : {});
+    setRepoResults(initialCache?.repos ? { ...initialCache.repos } : {});
+    // Only reset when switching to a different token
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenId]);
 
-    if (initialResult && !initialResult.targetOrg) {
-      setResult(initialResult);
-    } else {
-      setResult(null);
-      void runCheck('');
-    }
-  }, [token, initialResult, runCheck]);
+  const isRunning = Boolean(checkingOrgKey || checkingRepoKey || batchProgress);
 
   useEffect(() => {
-    if (!token) return;
+    if (!tokenId) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !loading) onClose();
+      if (e.key === 'Escape' && !isRunning) onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [token, loading, onClose]);
+  }, [tokenId, isRunning, onClose]);
 
-  const orgStatuses = result?.organizations ?? [];
-  const repoStatuses = result?.repositories ?? [];
+  const normalizedOrgs = useMemo(() => {
+    return organizations
+      .map((o) => ({
+        org: (o.org || '').trim(),
+        name: o.name?.trim() || '',
+      }))
+      .filter((o) => o.org.length > 0);
+  }, [organizations]);
+
+  const normalizedRepos = useMemo<NormalizedRepoTarget[]>(() => {
+    const seen = new Set<string>();
+    const list: NormalizedRepoTarget[] = [];
+    for (const r of repositories) {
+      const rawFull = (r.fullRepository || '').trim();
+      const org = (r.org || (rawFull.includes('/') ? rawFull.split('/')[0] : '')).trim();
+      const repoName = (
+        r.repoName || (rawFull.includes('/') ? rawFull.split('/').slice(1).join('/') : rawFull)
+      ).trim();
+      if (!org || !repoName) continue;
+      const fullRepository = `${org}/${repoName}`;
+      const key = fullRepository.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({ key, org, repoName, fullRepository });
+    }
+    return list;
+  }, [repositories]);
+
+  const scopedRepos = useMemo(() => {
+    if (!selectedRepoOrg) return normalizedRepos;
+    const lower = selectedRepoOrg.toLowerCase();
+    return normalizedRepos.filter((r) => r.org.toLowerCase() === lower);
+  }, [normalizedRepos, selectedRepoOrg]);
 
   const visibleOrgs = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return orgStatuses.filter((item) => {
-      const ok = Boolean(item.accessible);
-      if (statusFilter === 'ok' && !ok) return false;
-      if (statusFilter === 'issues' && ok) return false;
+    return normalizedOrgs.filter((item) => {
+      const res = orgResults[item.org.toLowerCase()];
+      if (statusFilter === 'ok' && !res?.accessible) return false;
+      if (statusFilter === 'issues' && (!res || res.accessible)) return false;
+      if (statusFilter === 'unchecked' && Boolean(res)) return false;
       if (q) {
-        const hay = `${item.org ?? ''} ${item.role ?? ''} ${item.state ?? ''} ${item.error ?? ''}`.toLowerCase();
+        const hay = `${item.org} ${item.name} ${res?.role ?? ''} ${res?.state ?? ''} ${res?.error ?? ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [orgStatuses, statusFilter, search]);
+  }, [normalizedOrgs, orgResults, statusFilter, search]);
 
   const visibleRepos = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return repoStatuses.filter((item) => {
-      const ok = Boolean(item.accessible && item.canPush);
+    return scopedRepos.filter((item) => {
+      const res = repoResults[item.key];
+      const ok = Boolean(res?.accessible && res?.canPush);
       if (statusFilter === 'ok' && !ok) return false;
-      if (statusFilter === 'issues' && ok) return false;
+      if (statusFilter === 'issues' && (!res || ok)) return false;
+      if (statusFilter === 'unchecked' && Boolean(res)) return false;
       if (q) {
-        const hay = `${item.fullRepository ?? ''} ${item.org ?? ''} ${item.repoName ?? ''} ${item.error ?? ''}`.toLowerCase();
+        const hay = `${item.fullRepository} ${item.org} ${item.repoName} ${res?.error ?? ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [repoStatuses, statusFilter, search]);
+  }, [scopedRepos, repoResults, statusFilter, search]);
 
   if (!token) return null;
 
@@ -161,23 +210,305 @@ export function TokenAccessCheckModal({
     ? `@${token.accountUsername}`
     : token.accountName || token.tokenPreview || token.id;
 
-  const handleOrgScopeChange = (nextOrg: string) => {
-    setSelectedOrg(nextOrg);
-    void runCheck(nextOrg);
+  const syncCacheToParent = (
+    nextOrgs: Record<string, GitHubTokenOrgAccessCheckResponse>,
+    nextRepos: Record<string, GitHubTokenRepoAccessCheckResponse>
+  ) => {
+    if (tokenId && onCacheUpdatedRef.current) {
+      onCacheUpdatedRef.current(tokenId, { orgs: nextOrgs, repos: nextRepos });
+    }
   };
+
+  const checkSingleOrg = async (orgSlug: string) => {
+    if (!tokenId || !orgSlug) return;
+    const key = orgSlug.toLowerCase();
+    setCheckingOrgKey(key);
+    setError(null);
+    try {
+      const res = await executeApi(
+        v1.checkTokenOrgAccess({
+          id: encodeURIComponent(tokenId),
+          org: encodeURIComponent(orgSlug),
+        }),
+        serverConfig.useProxy
+      );
+      if (!mountedRef.current) return;
+      const nextOrgs = { ...orgResultsRef.current, [key]: res };
+      setOrgResults(nextOrgs);
+      syncCacheToParent(nextOrgs, repoResultsRef.current);
+    } catch (err) {
+      if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+        onAuthFailure(err.message);
+        return;
+      }
+      if (!mountedRef.current) return;
+      const msg =
+        err instanceof ApiClientError
+          ? err.message
+          : `Không thể kiểm tra quyền truy cập org "${orgSlug}".`;
+      const failedRes: GitHubTokenOrgAccessCheckResponse = {
+        org: orgSlug,
+        accessible: false,
+        error: msg,
+      };
+      const nextOrgs = { ...orgResultsRef.current, [key]: failedRes };
+      setOrgResults(nextOrgs);
+      syncCacheToParent(nextOrgs, repoResultsRef.current);
+    } finally {
+      if (mountedRef.current) setCheckingOrgKey(null);
+    }
+  };
+
+  const checkSingleRepo = async (target: NormalizedRepoTarget) => {
+    if (!tokenId) return;
+    setCheckingRepoKey(target.key);
+    setError(null);
+    try {
+      const res = await executeApi(
+        v1.checkTokenRepoAccess({
+          id: encodeURIComponent(tokenId),
+          org: encodeURIComponent(target.org),
+          repo: encodeURIComponent(target.repoName),
+        }),
+        serverConfig.useProxy
+      );
+      if (!mountedRef.current) return;
+      const nextRepos = { ...repoResultsRef.current, [target.key]: res };
+      setRepoResults(nextRepos);
+      syncCacheToParent(orgResultsRef.current, nextRepos);
+    } catch (err) {
+      if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+        onAuthFailure(err.message);
+        return;
+      }
+      if (!mountedRef.current) return;
+      const msg =
+        err instanceof ApiClientError
+          ? err.message
+          : `Không thể kiểm tra quyền truy cập repo "${target.fullRepository}".`;
+      const failedRes: GitHubTokenRepoAccessCheckResponse = {
+        org: target.org,
+        repoName: target.repoName,
+        fullRepository: target.fullRepository,
+        accessible: false,
+        canPush: false,
+        canAdmin: false,
+        error: msg,
+      };
+      const nextRepos = { ...repoResultsRef.current, [target.key]: failedRes };
+      setRepoResults(nextRepos);
+      syncCacheToParent(orgResultsRef.current, nextRepos);
+    } finally {
+      if (mountedRef.current) setCheckingRepoKey(null);
+    }
+  };
+
+  const handleCheckAllOrgs = async () => {
+    if (!tokenId || normalizedOrgs.length === 0) return;
+    stopRef.current = false;
+    setStopping(false);
+    setError(null);
+    setBatchProgress({
+      mode: 'organizations',
+      completed: 0,
+      total: normalizedOrgs.length,
+      ok: 0,
+      issues: 0,
+    });
+
+    let okCount = 0;
+    let issueCount = 0;
+    let stoppedEarly = false;
+    let latestOrgs = { ...orgResultsRef.current };
+
+    for (let i = 0; i < normalizedOrgs.length; i++) {
+      if (stopRef.current || !mountedRef.current) {
+        stoppedEarly = true;
+        break;
+      }
+
+      const item = normalizedOrgs[i];
+      const key = item.org.toLowerCase();
+      setCheckingOrgKey(key);
+
+      try {
+        const res = await executeApi(
+          v1.checkTokenOrgAccess({
+            id: encodeURIComponent(tokenId),
+            org: encodeURIComponent(item.org),
+          }),
+          serverConfig.useProxy
+        );
+        latestOrgs = { ...latestOrgs, [key]: res };
+        if (res.accessible) okCount += 1;
+        else issueCount += 1;
+      } catch (err) {
+        if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+          if (mountedRef.current) {
+            setCheckingOrgKey(null);
+            setBatchProgress(null);
+            setStopping(false);
+          }
+          onAuthFailure(err.message);
+          return;
+        }
+        issueCount += 1;
+        latestOrgs = {
+          ...latestOrgs,
+          [key]: {
+            org: item.org,
+            accessible: false,
+            error: err instanceof ApiClientError ? err.message : 'Lỗi khi kiểm tra org.',
+          },
+        };
+      }
+
+      if (mountedRef.current) {
+        setOrgResults(latestOrgs);
+        setBatchProgress({
+          mode: 'organizations',
+          completed: i + 1,
+          total: normalizedOrgs.length,
+          ok: okCount,
+          issues: issueCount,
+        });
+      }
+    }
+
+    if (!mountedRef.current) return;
+    setCheckingOrgKey(null);
+    setBatchProgress(null);
+    setStopping(false);
+    syncCacheToParent(latestOrgs, repoResultsRef.current);
+
+    notify({
+      tone: issueCount === 0 && !stoppedEarly ? 'success' : 'info',
+      title: stoppedEarly
+        ? `Đã dừng kiểm tra Org (${okCount + issueCount}/${normalizedOrgs.length})`
+        : `Hoàn tất kiểm tra ${normalizedOrgs.length} Organization`,
+      description: `Có quyền: ${okCount} · Không có quyền/Lỗi: ${issueCount}`,
+    });
+  };
+
+  const handleCheckAllRepos = async () => {
+    if (!tokenId || scopedRepos.length === 0) return;
+    stopRef.current = false;
+    setStopping(false);
+    setError(null);
+    setBatchProgress({
+      mode: 'repositories',
+      completed: 0,
+      total: scopedRepos.length,
+      ok: 0,
+      issues: 0,
+    });
+
+    let okCount = 0;
+    let issueCount = 0;
+    let stoppedEarly = false;
+    let latestRepos = { ...repoResultsRef.current };
+
+    for (let i = 0; i < scopedRepos.length; i++) {
+      if (stopRef.current || !mountedRef.current) {
+        stoppedEarly = true;
+        break;
+      }
+
+      const item = scopedRepos[i];
+      setCheckingRepoKey(item.key);
+
+      try {
+        const res = await executeApi(
+          v1.checkTokenRepoAccess({
+            id: encodeURIComponent(tokenId),
+            org: encodeURIComponent(item.org),
+            repo: encodeURIComponent(item.repoName),
+          }),
+          serverConfig.useProxy
+        );
+        latestRepos = { ...latestRepos, [item.key]: res };
+        if (res.accessible && res.canPush) okCount += 1;
+        else issueCount += 1;
+      } catch (err) {
+        if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+          if (mountedRef.current) {
+            setCheckingRepoKey(null);
+            setBatchProgress(null);
+            setStopping(false);
+          }
+          onAuthFailure(err.message);
+          return;
+        }
+        issueCount += 1;
+        latestRepos = {
+          ...latestRepos,
+          [item.key]: {
+            org: item.org,
+            repoName: item.repoName,
+            fullRepository: item.fullRepository,
+            accessible: false,
+            canPush: false,
+            canAdmin: false,
+            error: err instanceof ApiClientError ? err.message : 'Lỗi khi kiểm tra repo.',
+          },
+        };
+      }
+
+      if (mountedRef.current) {
+        setRepoResults(latestRepos);
+        setBatchProgress({
+          mode: 'repositories',
+          completed: i + 1,
+          total: scopedRepos.length,
+          ok: okCount,
+          issues: issueCount,
+        });
+      }
+    }
+
+    if (!mountedRef.current) return;
+    setCheckingRepoKey(null);
+    setBatchProgress(null);
+    setStopping(false);
+    syncCacheToParent(orgResultsRef.current, latestRepos);
+
+    notify({
+      tone: issueCount === 0 && !stoppedEarly ? 'success' : 'info',
+      title: stoppedEarly
+        ? `Đã dừng kiểm tra Repo (${okCount + issueCount}/${scopedRepos.length})`
+        : `Hoàn tất kiểm tra ${scopedRepos.length} Repository`,
+      description: `Đủ Đọc/Ghi: ${okCount} · Thiếu quyền/Lỗi: ${issueCount}`,
+    });
+  };
+
+  const handleStopBatch = () => {
+    stopRef.current = true;
+    setStopping(true);
+  };
+
+  // Summary metrics
+  const checkedOrgValues = Object.values(orgResults);
+  const okOrgCount = checkedOrgValues.filter((o) => o.accessible).length;
+  const issueOrgCount = checkedOrgValues.length - okOrgCount;
+
+  const scopedRepoResults = scopedRepos
+    .map((r) => repoResults[r.key])
+    .filter((r): r is GitHubTokenRepoAccessCheckResponse => Boolean(r));
+  const okRepoCount = scopedRepoResults.filter((r) => r.accessible && r.canPush).length;
+  const issueRepoCount = scopedRepoResults.length - okRepoCount;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px] p-4"
       onClick={() => {
-        if (!loading) onClose();
+        if (!isRunning) onClose();
       }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="token-access-check-title"
-        className="w-full max-w-3xl max-h-[88vh] flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] shadow-2xl overflow-hidden"
+        className="w-full max-w-3xl max-h-[88vh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -198,57 +529,92 @@ export function TokenAccessCheckModal({
               )}
             </div>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
-              {selectedOrg
-                ? `Đang kiểm tra phạm vi Organization: ${selectedOrg}`
-                : 'Kiểm tra quyền Đọc & Ghi (Push) trên toàn bộ Organization và Repository'}
+              Kiểm tra riêng từng Organization hoặc từng Repository, hoặc chạy vòng lặp kiểm tra tất cả
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            disabled={loading}
+            disabled={isRunning}
             aria-label="Đóng hộp thoại"
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 transition-colors"
+            className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Scope selector & re-run toolbar */}
+        {/* Mode Switcher + Check All Action Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 px-6 py-3">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <label
-              htmlFor="check-access-org-scope"
-              className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap"
+          <div className="inline-flex rounded-lg bg-slate-200/70 dark:bg-slate-800 p-0.5 text-xs font-medium self-start">
+            <button
+              type="button"
+              disabled={isRunning}
+              onClick={() => {
+                setActiveTab('organizations');
+                setSearch('');
+                setStatusFilter('all');
+              }}
+              className={`cursor-pointer inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 ${
+                activeTab === 'organizations'
+                  ? 'bg-white dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
             >
-              Phạm vi:
-            </label>
-            <select
-              id="check-access-org-scope"
-              value={selectedOrg}
-              disabled={loading}
-              onChange={(e) => handleOrgScopeChange(e.target.value)}
-              className="flex-1 max-w-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#090D16] px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-600 focus:outline-none disabled:opacity-60"
+              <Building2 className="h-3.5 w-3.5" />
+              <span>Organizations ({normalizedOrgs.length})</span>
+            </button>
+            <button
+              type="button"
+              disabled={isRunning}
+              onClick={() => {
+                setActiveTab('repositories');
+                setSearch('');
+                setStatusFilter('all');
+              }}
+              className={`cursor-pointer inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 ${
+                activeTab === 'repositories'
+                  ? 'bg-white dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
             >
-              <option value="">Tất cả Organization trong DB ({organizations.length})</option>
-              {organizations.map((org) => (
-                <option key={org.org} value={org.org || ''}>
-                  {org.org}
-                  {org.name && org.name !== org.org ? ` (${org.name})` : ''}
-                </option>
-              ))}
-            </select>
+              <GitFork className="h-3.5 w-3.5" />
+              <span>Repositories ({scopedRepos.length})</span>
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void runCheck(selectedOrg)}
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 px-3.5 py-1.5 text-xs font-medium text-white disabled:opacity-50 transition-colors whitespace-nowrap shrink-0"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Đang kiểm tra...' : 'Kiểm tra lại'}
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {batchProgress ? (
+              <button
+                type="button"
+                onClick={handleStopBatch}
+                disabled={stopping}
+                className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-3.5 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 disabled:opacity-50 transition-colors"
+              >
+                <Square className="h-3.5 w-3.5" />
+                {stopping ? 'Đang dừng...' : 'Dừng kiểm tra'}
+              </button>
+            ) : activeTab === 'organizations' ? (
+              <button
+                type="button"
+                disabled={isRunning || normalizedOrgs.length === 0}
+                onClick={() => void handleCheckAllOrgs()}
+                className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 px-3.5 py-1.5 text-xs font-medium text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Kiểm tra tất cả Org ({normalizedOrgs.length})
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={isRunning || scopedRepos.length === 0}
+                onClick={() => void handleCheckAllRepos()}
+                className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 px-3.5 py-1.5 text-xs font-medium text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Kiểm tra tất cả Repo ({scopedRepos.length})
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Body */}
@@ -263,359 +629,389 @@ export function TokenAccessCheckModal({
             </div>
           )}
 
-          {loading && !result ? (
-            <div className="flex flex-col items-center justify-center py-14 text-xs text-slate-500 dark:text-slate-400 gap-2.5">
-              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-              <span>
-                Đang kiểm tra quyền truy cập Organization và quyền Đọc/Ghi (Push) trên GitHub...
-              </span>
+          {/* Live FE Loop Progress Bar */}
+          {batchProgress && (
+            <div className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-950/25 p-3.5 space-y-2">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="inline-flex items-center gap-2 font-medium text-slate-900 dark:text-slate-100">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600 dark:text-blue-400" />
+                  {stopping
+                    ? 'Đang dừng sau mục hiện tại...'
+                    : `Đang kiểm tra ${
+                        batchProgress.mode === 'organizations' ? 'Organization' : 'Repository'
+                      } (${batchProgress.completed}/${batchProgress.total})...`}
+                </span>
+                <span className="font-mono text-[11px] tabular-nums text-slate-600 dark:text-slate-400">
+                  Đạt:{' '}
+                  <strong className="text-emerald-700 dark:text-emerald-400">
+                    {batchProgress.ok}
+                  </strong>{' '}
+                  · Thiếu quyền:{' '}
+                  <strong className="text-red-700 dark:text-red-400">
+                    {batchProgress.issues}
+                  </strong>
+                </span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-200/70 dark:bg-slate-800">
+                <div
+                  className="h-full bg-blue-600 dark:bg-blue-500 transition-all duration-150"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.round((batchProgress.completed / Math.max(1, batchProgress.total)) * 100)
+                    )}%`,
+                  }}
+                />
+              </div>
             </div>
-          ) : result ? (
-            <>
-              {/* Verdict banner */}
-              <div
-                className={`flex items-start gap-3 rounded-xl border p-4 ${
-                  result.hasFullAccess
-                    ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30'
-                    : 'border-amber-200 dark:border-amber-900/60 bg-amber-50/75 dark:bg-amber-950/30'
-                }`}
-              >
-                {result.hasFullAccess ? (
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                ) : (
-                  <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
-                )}
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p
-                    className={`font-display text-sm font-semibold ${
-                      result.hasFullAccess
-                        ? 'text-emerald-900 dark:text-emerald-200'
-                        : 'text-amber-900 dark:text-amber-200'
-                    }`}
-                  >
-                    {result.hasFullAccess
-                      ? 'Đủ 100% quyền Đọc & Ghi (Push) trong phạm vi kiểm tra'
-                      : 'Chưa đủ quyền truy cập hoặc thiếu quyền Ghi (Push)'}
-                  </p>
-                  <p
-                    className={`text-xs ${
-                      result.hasFullAccess
-                        ? 'text-emerald-800/90 dark:text-emerald-300/90'
-                        : 'text-amber-800/90 dark:text-amber-300/90'
-                    }`}
-                  >
-                    Phạm vi:{' '}
-                    <span className="font-mono font-medium">
-                      {result.targetOrg || 'Toàn bộ Organization & Repository trong DB'}
-                    </span>
-                    {result.tokenPreview ? ` · Token: ${result.tokenPreview}` : ''}
-                  </p>
-                </div>
+          )}
+
+          {/* Compact Summary Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-3">
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                Organizations đã kiểm tra
+              </p>
+              <p className="mt-1 font-mono text-base font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                <span className="text-emerald-600 dark:text-emerald-400">{okOrgCount}</span>
+                <span className="text-xs font-normal text-slate-400">
+                  {' '}
+                  / {checkedOrgValues.length} đã check
+                </span>
+              </p>
+              {issueOrgCount > 0 && (
+                <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
+                  {issueOrgCount} không có quyền
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-3">
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                Repositories đủ Đọc &amp; Ghi
+              </p>
+              <p className="mt-1 font-mono text-base font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                <span className="text-emerald-600 dark:text-emerald-400">{okRepoCount}</span>
+                <span className="text-xs font-normal text-slate-400">
+                  {' '}
+                  / {scopedRepoResults.length} đã check
+                </span>
+              </p>
+              {issueRepoCount > 0 && (
+                <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
+                  {issueRepoCount} thiếu quyền
+                </p>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-3">
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                Trạng thái Token
+              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    token.isActive
+                      ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  {token.isActive ? 'Đang bật' : 'Đã tắt'}
+                </span>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    token.isSuperToken
+                      ? 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  {token.isSuperToken ? 'Super Token' : 'Thường'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={
+                    activeTab === 'organizations' ? 'Tìm organization...' : 'Tìm repository...'
+                  }
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#090D16] pl-8 pr-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none"
+                />
               </div>
 
-              {/* Summary metrics */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-3">
-                  <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Organizations truy cập được
-                  </p>
-                  <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                    {result.accessibleOrganizationsCount ?? 0}
-                    <span className="text-xs font-normal text-slate-400">
-                      {' '}
-                      / {result.totalOrganizations ?? orgStatuses.length}
-                    </span>
-                  </p>
-                  {(result.inaccessibleOrganizationsCount ?? 0) > 0 && (
-                    <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
-                      {result.inaccessibleOrganizationsCount} không truy cập được
-                    </p>
-                  )}
-                </div>
+              {activeTab === 'repositories' && (
+                <select
+                  value={selectedRepoOrg}
+                  disabled={isRunning}
+                  onChange={(e) => setSelectedRepoOrg(e.target.value)}
+                  aria-label="Lọc repository theo Organization"
+                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#090D16] px-2.5 py-1.5 font-mono text-xs text-slate-800 dark:text-slate-200 focus:border-blue-600 focus:outline-none disabled:opacity-60 sm:max-w-[200px]"
+                >
+                  <option value="">Tất cả Org ({normalizedRepos.length})</option>
+                  {normalizedOrgs.map((o) => (
+                    <option key={o.org} value={o.org}>
+                      {o.org}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
-                <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-3">
-                  <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Repositories đủ Đọc &amp; Ghi (Push)
-                  </p>
-                  <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                    {result.accessibleRepositoriesCount ?? 0}
-                    <span className="text-xs font-normal text-slate-400">
-                      {' '}
-                      / {result.totalRepositories ?? repoStatuses.length}
-                    </span>
-                  </p>
-                  {(result.inaccessibleRepositoriesCount ?? 0) > 0 && (
-                    <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
-                      {result.inaccessibleRepositoriesCount} thiếu quyền đọc/ghi
-                    </p>
-                  )}
-                </div>
+            <div className="inline-flex rounded-lg bg-slate-200/70 dark:bg-slate-800 p-0.5 text-[11px] font-medium shrink-0 self-start sm:self-auto">
+              {(
+                [
+                  { id: 'all', label: 'Tất cả' },
+                  { id: 'ok', label: 'Đạt' },
+                  { id: 'issues', label: 'Thiếu quyền' },
+                  { id: 'unchecked', label: 'Chưa check' },
+                ] as const
+              ).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStatusFilter(f.id)}
+                  className={`cursor-pointer rounded-md px-2 py-1 transition-colors whitespace-nowrap ${
+                    statusFilter === f.id
+                      ? 'bg-white dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-3">
-                  <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Trạng thái Token
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        result.isActive
-                          ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      {result.isActive ? 'Đang bật' : 'Đã tắt'}
-                    </span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        result.isSuperToken
-                          ? 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300'
-                          : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      {result.isSuperToken ? 'Super Token' : 'Thường'}
-                    </span>
-                  </div>
-                </div>
+          {/* Tab Content: Organizations */}
+          {activeTab === 'organizations' ? (
+            visibleOrgs.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+                {normalizedOrgs.length === 0
+                  ? 'Chưa có organization nào trong hệ thống.'
+                  : 'Không có organization nào khớp bộ lọc.'}
               </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400">
+                      <th className="py-2.5 pl-4 pr-3 font-medium">Organization</th>
+                      <th className="py-2.5 px-3 font-medium whitespace-nowrap">Kết quả</th>
+                      <th className="py-2.5 px-3 font-medium whitespace-nowrap">Role / State</th>
+                      <th className="py-2.5 px-3 font-medium">Chi tiết lỗi</th>
+                      <th className="py-2.5 pl-3 pr-4 text-right font-medium whitespace-nowrap">
+                        Thao tác
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {visibleOrgs.map((item) => {
+                      const key = item.org.toLowerCase();
+                      const res = orgResults[key];
+                      const isRowChecking = checkingOrgKey === key;
 
-              {/* Detail tabs + filters */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
-                <div className="inline-flex rounded-lg bg-slate-200/70 dark:bg-slate-800 p-0.5 text-xs font-medium self-start">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('organizations')}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 transition-colors ${
-                      activeTab === 'organizations'
-                        ? 'bg-white dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <Building2 className="h-3.5 w-3.5" />
-                    Organizations ({orgStatuses.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('repositories')}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 transition-colors ${
-                      activeTab === 'repositories'
-                        ? 'bg-white dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <GitFork className="h-3.5 w-3.5" />
-                    Repositories ({repoStatuses.length})
-                  </button>
-                </div>
+                      return (
+                        <tr
+                          key={item.org}
+                          className={`transition-colors ${
+                            isRowChecking
+                              ? 'bg-blue-50/50 dark:bg-blue-950/20'
+                              : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/35'
+                          }`}
+                        >
+                          <td className="py-2.5 pl-4 pr-3 font-mono font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                            <a
+                              href={`https://github.com/${encodeURIComponent(item.org)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                              {item.org}
+                              <ExternalLink className="h-3 w-3 text-slate-400" />
+                            </a>
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            {isRowChecking ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Đang kiểm tra...
+                              </span>
+                            ) : !res ? (
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                                Chưa kiểm tra
+                              </span>
+                            ) : res.accessible ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Có quyền
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
+                                <XCircle className="h-3 w-3" />
+                                Không có quyền
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                            {res?.role || '—'}
+                            {res?.state ? ` · ${res.state}` : ''}
+                          </td>
+                          <td className="py-2.5 px-3 text-red-600 dark:text-red-400">
+                            {res?.error || '—'}
+                          </td>
+                          <td className="py-2.5 pl-3 pr-4 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              disabled={isRunning}
+                              onClick={() => void checkSingleOrg(item.org)}
+                              className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                            >
+                              {isRowChecking ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-3 w-3" />
+                              )}
+                              {res ? 'Kiểm tra lại' : 'Kiểm tra'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : visibleRepos.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+              {scopedRepos.length === 0
+                ? 'Không có repository nào trong phạm vi này.'
+                : 'Không có repository nào khớp bộ lọc.'}
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400">
+                    <th className="py-2.5 pl-4 pr-3 font-medium">Repository</th>
+                    <th className="py-2.5 px-2.5 font-medium text-center whitespace-nowrap">
+                      Đọc
+                    </th>
+                    <th className="py-2.5 px-2.5 font-medium text-center whitespace-nowrap">
+                      Ghi (Push)
+                    </th>
+                    <th className="py-2.5 px-2.5 font-medium text-center whitespace-nowrap">
+                      Admin
+                    </th>
+                    <th className="py-2.5 px-3 font-medium">Chi tiết lỗi</th>
+                    <th className="py-2.5 pl-3 pr-4 text-right font-medium whitespace-nowrap">
+                      Thao tác
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                  {visibleRepos.map((item) => {
+                    const res = repoResults[item.key];
+                    const isRowChecking = checkingRepoKey === item.key;
 
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1 sm:w-48">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Tìm kiếm..."
-                      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#090D16] pl-8 pr-2.5 py-1 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none"
-                    />
-                  </div>
-                  <div className="inline-flex rounded-lg bg-slate-200/70 dark:bg-slate-800 p-0.5 text-[11px] font-medium shrink-0">
-                    {(
-                      [
-                        { id: 'all', label: 'Tất cả' },
-                        { id: 'ok', label: 'Đạt' },
-                        { id: 'issues', label: 'Thiếu quyền' },
-                      ] as const
-                    ).map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setStatusFilter(f.id)}
-                        className={`rounded-md px-2 py-1 transition-colors ${
-                          statusFilter === f.id
-                            ? 'bg-white dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 shadow-xs'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    return (
+                      <tr
+                        key={item.key}
+                        className={`transition-colors ${
+                          isRowChecking
+                            ? 'bg-blue-50/50 dark:bg-blue-950/20'
+                            : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/35'
                         }`}
                       >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tab content */}
-              {activeTab === 'organizations' ? (
-                visibleOrgs.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 py-8 text-center text-xs text-slate-500 dark:text-slate-400">
-                    Không có organization nào khớp bộ lọc.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400">
-                          <th className="py-2.5 pl-4 pr-3 font-medium">Organization</th>
-                          <th className="py-2.5 px-3 font-medium whitespace-nowrap">Truy cập</th>
-                          <th className="py-2.5 px-3 font-medium whitespace-nowrap">Role / State</th>
-                          <th className="py-2.5 px-3 font-medium">Chi tiết lỗi</th>
-                          <th className="py-2.5 pl-3 pr-4 text-right font-medium whitespace-nowrap">
-                            Phạm vi
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                        {visibleOrgs.map((item) => (
-                          <tr
-                            key={item.org}
-                            className="hover:bg-slate-50/70 dark:hover:bg-slate-800/35"
+                        <td className="py-2.5 pl-4 pr-3 font-mono font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                          <a
+                            href={`https://github.com/${item.fullRepository}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400"
                           >
-                            <td className="py-2.5 pl-4 pr-3 font-mono font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                              {item.org ? (
-                                <a
-                                  href={`https://github.com/${encodeURIComponent(item.org)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400"
-                                >
-                                  {item.org}
-                                  <ExternalLink className="h-3 w-3 text-slate-400" />
-                                </a>
-                              ) : (
-                                '—'
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap">
-                              {item.accessible ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  Có quyền
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
-                                  <XCircle className="h-3 w-3" />
-                                  Không có quyền
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                              {item.role || '—'}
-                              {item.state ? ` · ${item.state}` : ''}
-                            </td>
-                            <td className="py-2.5 px-3 text-red-600 dark:text-red-400">
-                              {item.error || '—'}
-                            </td>
-                            <td className="py-2.5 pl-3 pr-4 text-right whitespace-nowrap">
-                              {item.org && selectedOrg !== item.org ? (
-                                <button
-                                  type="button"
-                                  disabled={loading}
-                                  onClick={() => handleOrgScopeChange(item.org!)}
-                                  className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
-                                >
-                                  Kiểm tra riêng
-                                </button>
-                              ) : (
-                                <span className="text-[11px] text-slate-400">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )
-              ) : visibleRepos.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 py-8 text-center text-xs text-slate-500 dark:text-slate-400">
-                  Không có repository nào khớp bộ lọc.
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400">
-                        <th className="py-2.5 pl-4 pr-3 font-medium">Repository</th>
-                        <th className="py-2.5 px-3 font-medium text-center whitespace-nowrap">
-                          Đọc (Read)
-                        </th>
-                        <th className="py-2.5 px-3 font-medium text-center whitespace-nowrap">
-                          Ghi (Push)
-                        </th>
-                        <th className="py-2.5 px-3 font-medium text-center whitespace-nowrap">
-                          Admin
-                        </th>
-                        <th className="py-2.5 pl-3 pr-4 font-medium">Chi tiết lỗi</th>
+                            {item.fullRepository}
+                            <ExternalLink className="h-3 w-3 text-slate-400" />
+                          </a>
+                        </td>
+                        <td className="py-2.5 px-2.5 text-center">
+                          {isRowChecking ? (
+                            <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin text-blue-600" />
+                          ) : !res ? (
+                            <span className="text-slate-300 dark:text-slate-600">—</span>
+                          ) : res.accessible ? (
+                            <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <XCircle className="mx-auto h-4 w-4 text-red-500 dark:text-red-400" />
+                          )}
+                        </td>
+                        <td className="py-2.5 px-2.5 text-center">
+                          {isRowChecking ? (
+                            <span className="text-slate-300 dark:text-slate-600">…</span>
+                          ) : !res ? (
+                            <span className="text-slate-300 dark:text-slate-600">—</span>
+                          ) : res.canPush ? (
+                            <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <XCircle className="mx-auto h-4 w-4 text-red-500 dark:text-red-400" />
+                          )}
+                        </td>
+                        <td className="py-2.5 px-2.5 text-center">
+                          {!res ? (
+                            <span className="text-slate-300 dark:text-slate-600">—</span>
+                          ) : res.canAdmin ? (
+                            <CheckCircle2 className="mx-auto h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600">—</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-red-600 dark:text-red-400">
+                          {res?.error || '—'}
+                        </td>
+                        <td className="py-2.5 pl-3 pr-4 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            disabled={isRunning}
+                            onClick={() => void checkSingleRepo(item)}
+                            className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                          >
+                            {isRowChecking ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                            {res ? 'Kiểm tra lại' : 'Kiểm tra'}
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                      {visibleRepos.map((item) => {
-                        const slug =
-                          item.fullRepository ||
-                          (item.org && item.repoName ? `${item.org}/${item.repoName}` : '');
-                        return (
-                          <tr
-                            key={slug}
-                            className="hover:bg-slate-50/70 dark:hover:bg-slate-800/35"
-                          >
-                            <td className="py-2.5 pl-4 pr-3 font-mono font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                              {slug ? (
-                                <a
-                                  href={`https://github.com/${slug}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400"
-                                >
-                                  {slug}
-                                  <ExternalLink className="h-3 w-3 text-slate-400" />
-                                </a>
-                              ) : (
-                                '—'
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              {item.accessible ? (
-                                <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                              ) : (
-                                <XCircle className="mx-auto h-4 w-4 text-red-500 dark:text-red-400" />
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              {item.canPush ? (
-                                <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                              ) : (
-                                <XCircle className="mx-auto h-4 w-4 text-red-500 dark:text-red-400" />
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              {item.canAdmin ? (
-                                <CheckCircle2 className="mx-auto h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                              ) : (
-                                <span className="text-slate-300 dark:text-slate-600">—</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 pl-3 pr-4 text-red-600 dark:text-red-400">
-                              {item.error || '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          ) : null}
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 px-6 py-3.5">
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            Quyền Ghi (Push) được xác định qua GitHub API trên từng repository trong hệ thống.
-          </p>
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Chế độ &ldquo;Kiểm tra tất cả&rdquo; gọi tuần tự từng API riêng trên trình duyệt và có thể dừng bất kỳ lúc nào.
+            </span>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            disabled={loading}
-            className="rounded-lg border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+            disabled={isRunning}
+            className="cursor-pointer rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors shrink-0"
           >
             Đóng
           </button>

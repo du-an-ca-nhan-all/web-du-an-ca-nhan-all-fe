@@ -22,9 +22,10 @@ import {
   ApiClientError,
   executeApi,
   useBackendClient,
-  type GitHubTokenAccessCheckResponse,
+  type GitHubTokenOrgAccessCheckResponse,
   type GitHubTokenResponse,
   type OrganizationEntity,
+  type RepositoryEntity,
 } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -32,11 +33,15 @@ import { formatDateTime } from '../../utils/format';
 import { AddTokenModal } from './AddTokenModal';
 import { ImportOrgsModal } from './ImportOrgsModal';
 import { OrgInvitationsModal } from './OrgInvitationsModal';
-import { TokenAccessCheckModal } from './TokenAccessCheckModal';
+import {
+  TokenAccessCheckModal,
+  type TokenAccessCheckCache,
+} from './TokenAccessCheckModal';
 
 interface TokensPanelProps {
   tokens: GitHubTokenResponse[];
   organizations: OrganizationEntity[];
+  repositories: RepositoryEntity[];
   loading: boolean;
   error: string | null;
   superTokenOnly: boolean;
@@ -49,6 +54,7 @@ interface TokensPanelProps {
 export function TokensPanel({
   tokens,
   organizations,
+  repositories,
   loading,
   error,
   superTokenOnly,
@@ -78,8 +84,8 @@ export function TokensPanel({
   );
   const [accessCheckTargetToken, setAccessCheckTargetToken] =
     useState<GitHubTokenResponse | null>(null);
-  const [accessCheckResults, setAccessCheckResults] = useState<
-    Record<string, GitHubTokenAccessCheckResponse>
+  const [accessCheckCaches, setAccessCheckCaches] = useState<
+    Record<string, TokenAccessCheckCache>
   >({});
   const [checkingAllSuperTokens, setCheckingAllSuperTokens] = useState(false);
 
@@ -89,9 +95,9 @@ export function TokensPanel({
     );
   }, []);
 
-  const handleAccessResultUpdated = useCallback(
-    (tokenId: string, res: GitHubTokenAccessCheckResponse) => {
-      setAccessCheckResults((prev) => ({ ...prev, [tokenId]: res }));
+  const handleAccessCacheUpdated = useCallback(
+    (tokenId: string, cache: TokenAccessCheckCache) => {
+      setAccessCheckCaches((prev) => ({ ...prev, [tokenId]: cache }));
     },
     []
   );
@@ -111,41 +117,63 @@ export function TokensPanel({
   }, [tokens, search]);
 
   const handleCheckAllSuperTokens = async () => {
-    if (superTokens.length === 0) return;
+    const validOrgs = organizations.map((o) => (o.org || '').trim()).filter(Boolean);
+    if (superTokens.length === 0 || validOrgs.length === 0) return;
     setCheckingAllSuperTokens(true);
     setActionError(null);
 
     let fullCount = 0;
     let partialCount = 0;
-    let failedCount = 0;
 
     for (const item of superTokens) {
       if (!item.id) continue;
-      try {
-        const res = await executeApi(
-          v1.checkTokenAccess({ id: encodeURIComponent(item.id) }),
-          serverConfig.useProxy
-        );
-        setAccessCheckResults((prev) => ({ ...prev, [item.id!]: res }));
-        if (res.hasFullAccess) fullCount += 1;
-        else partialCount += 1;
-      } catch (err) {
-        if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
-          setCheckingAllSuperTokens(false);
-          onAuthFailure(err.message);
-          return;
+      const tokenOrgResults: Record<string, GitHubTokenOrgAccessCheckResponse> = {};
+      let allOrgsOk = true;
+
+      for (const orgSlug of validOrgs) {
+        const key = orgSlug.toLowerCase();
+        try {
+          const res = await executeApi(
+            v1.checkTokenOrgAccess({
+              id: encodeURIComponent(item.id),
+              org: encodeURIComponent(orgSlug),
+            }),
+            serverConfig.useProxy
+          );
+          tokenOrgResults[key] = res;
+          if (!res.accessible) allOrgsOk = false;
+        } catch (err) {
+          if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+            setCheckingAllSuperTokens(false);
+            onAuthFailure(err.message);
+            return;
+          }
+          allOrgsOk = false;
+          tokenOrgResults[key] = {
+            org: orgSlug,
+            accessible: false,
+            error: err instanceof ApiClientError ? err.message : 'Lỗi kiểm tra quyền org.',
+          };
         }
-        failedCount += 1;
       }
+
+      setAccessCheckCaches((prev) => ({
+        ...prev,
+        [item.id!]: {
+          orgs: tokenOrgResults,
+          repos: prev[item.id!]?.repos ?? {},
+        },
+      }));
+
+      if (allOrgsOk) fullCount += 1;
+      else partialCount += 1;
     }
 
     setCheckingAllSuperTokens(false);
     notify({
-      tone: partialCount === 0 && failedCount === 0 ? 'success' : 'info',
-      title: `Đã kiểm tra ${superTokens.length} Super Token`,
-      description: `Đủ quyền R/W: ${fullCount} · Thiếu quyền: ${partialCount}${
-        failedCount > 0 ? ` · Lỗi kiểm tra: ${failedCount}` : ''
-      }`,
+      tone: partialCount === 0 ? 'success' : 'info',
+      title: `Đã kiểm tra quyền Org cho ${superTokens.length} Super Token`,
+      description: `Đủ quyền toàn bộ ${validOrgs.length} Org: ${fullCount} · Thiếu quyền: ${partialCount}`,
     });
   };
 
@@ -417,7 +445,14 @@ export function TokensPanel({
               const isDeleting = deletingId === id;
               const isConfirming = confirmDeleteId === id;
               const isBusy = isUpdating || isSyncing || isDeleting;
-              const cachedAccess = id ? accessCheckResults[id] : undefined;
+              const cachedAccess = id ? accessCheckCaches[id] : undefined;
+              const checkedOrgs = cachedAccess ? Object.values(cachedAccess.orgs) : [];
+              const checkedRepos = cachedAccess ? Object.values(cachedAccess.repos) : [];
+              const hasCachedAccess = checkedOrgs.length > 0 || checkedRepos.length > 0;
+              const okOrgsCount = checkedOrgs.filter((o) => o.accessible).length;
+              const okReposCount = checkedRepos.filter((r) => r.accessible && r.canPush).length;
+              const allCheckedPassed =
+                okOrgsCount === checkedOrgs.length && okReposCount === checkedRepos.length;
 
               return (
                 <div
@@ -469,27 +504,29 @@ export function TokensPanel({
                         )}
                       </div>
 
-                      {cachedAccess && (
+                      {hasCachedAccess && (
                         <button
                           type="button"
                           onClick={() => setAccessCheckTargetToken(item)}
                           className={`cursor-pointer mt-1 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                            cachedAccess.hasFullAccess
+                            allCheckedPassed
                               ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/35 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/55'
                               : 'border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/35 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/55'
                           }`}
                         >
-                          {cachedAccess.hasFullAccess ? (
+                          {allCheckedPassed ? (
                             <CheckCircle2 className="h-3 w-3 shrink-0" />
                           ) : (
                             <ShieldAlert className="h-3 w-3 shrink-0" />
                           )}
                           <span>
-                            {cachedAccess.hasFullAccess ? 'Đủ quyền Đọc/Ghi' : 'Thiếu quyền'} ·{' '}
-                            {cachedAccess.accessibleOrganizationsCount ?? 0}/
-                            {cachedAccess.totalOrganizations ?? 0} Org ·{' '}
-                            {cachedAccess.accessibleRepositoriesCount ?? 0}/
-                            {cachedAccess.totalRepositories ?? 0} Repo
+                            {allCheckedPassed ? 'Đạt kiểm tra' : 'Thiếu quyền'}
+                            {checkedOrgs.length > 0
+                              ? ` · Org: ${okOrgsCount}/${checkedOrgs.length}`
+                              : ''}
+                            {checkedRepos.length > 0
+                              ? ` · Repo: ${okReposCount}/${checkedRepos.length}`
+                              : ''}
                           </span>
                         </button>
                       )}
@@ -656,10 +693,11 @@ export function TokensPanel({
       <TokenAccessCheckModal
         token={accessCheckTargetToken}
         organizations={organizations}
-        initialResult={
-          accessCheckTargetToken?.id ? accessCheckResults[accessCheckTargetToken.id] : null
+        repositories={repositories}
+        initialCache={
+          accessCheckTargetToken?.id ? accessCheckCaches[accessCheckTargetToken.id] : null
         }
-        onResultUpdated={handleAccessResultUpdated}
+        onCacheUpdated={handleAccessCacheUpdated}
         onClose={() => setAccessCheckTargetToken(null)}
         onAuthFailure={onAuthFailure}
       />

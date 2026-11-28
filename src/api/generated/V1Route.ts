@@ -33,8 +33,9 @@ import {
   GitHubRepoDefaultConfigResponse,
   GitHubRootDomainRequest,
   GitHubSquashCommitsResponse,
-  GitHubTokenAccessCheckResponse,
   GitHubTokenCreateRequest,
+  GitHubTokenOrgAccessCheckResponse,
+  GitHubTokenRepoAccessCheckResponse,
   GitHubTokenResponse,
   GitHubTokenUpdateRequest,
   GitHubUploadResponse,
@@ -115,29 +116,7 @@ export namespace V1 {
   }
 
   /**
-   * @description Nếu không truyền org: kiểm tra token với toàn bộ organizations và repositories đang có trong DB. Nếu truyền org: chỉ kiểm tra với organization đó và các repo thuộc org đó. Yêu cầu quyền SUPER_ADMIN.
-   * @tags github-upload
-   * @name CheckTokenAccess
-   * @summary Kiểm tra quyền truy cập của token với toàn bộ hoặc 1 organization & repositories trong DB
-   * @request GET:/v1/github/tokens/{id}/check-access
-   * @secure
-   */
-  export namespace CheckTokenAccess {
-    export type RequestParams = {
-      /** ID ngẫu nhiên (UUID) của token cần kiểm tra */
-      id: string;
-    };
-    export type RequestQuery = {
-      /** Tên organization cần kiểm tra riêng (bỏ trống để kiểm tra tất cả org và repo trong DB) */
-      org?: string;
-    };
-    export type RequestBody = never;
-    export type RequestHeaders = {};
-    export type ResponseBody = GitHubTokenAccessCheckResponse;
-  }
-
-  /**
-   * @description Kiểm tra xem token (theo ID) có quyền truy cập organization chỉ định và các repository thuộc organization đó trong DB hay chưa. Yêu cầu quyền SUPER_ADMIN.
+   * @description Chỉ kiểm tra xem token (theo ID) có quyền truy cập vào organization chỉ định hay không (không kiểm tra toàn bộ). Yêu cầu quyền SUPER_ADMIN.
    * @tags github-upload
    * @name CheckTokenOrgAccess
    * @summary Kiểm tra quyền truy cập của token với 1 organization cụ thể
@@ -154,7 +133,30 @@ export namespace V1 {
     export type RequestQuery = {};
     export type RequestBody = never;
     export type RequestHeaders = {};
-    export type ResponseBody = GitHubTokenAccessCheckResponse;
+    export type ResponseBody = GitHubTokenOrgAccessCheckResponse;
+  }
+
+  /**
+   * @description Chỉ kiểm tra xem token (theo ID) có quyền truy cập và ghi (push/admin) vào repository chỉ định hay không (không kiểm tra toàn bộ). Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name CheckTokenRepoAccess
+   * @summary Kiểm tra quyền truy cập của token với 1 repository cụ thể
+   * @request GET:/v1/github/tokens/{id}/organizations/{org}/repositories/{repo}/check-access
+   * @secure
+   */
+  export namespace CheckTokenRepoAccess {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token cần kiểm tra */
+      id: string;
+      /** Tên (slug/login) của organization chứa repository */
+      org: string;
+      /** Tên repository cần kiểm tra */
+      repo: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubTokenRepoAccessCheckResponse;
   }
 
   /**
