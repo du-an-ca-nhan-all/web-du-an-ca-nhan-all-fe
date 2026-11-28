@@ -195,10 +195,10 @@ export function TokenAccessCheckModal({
                 </span>
               )}
             </div>
-            <p className="mt-1 font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
               {selectedOrg
-                ? `GET /v1/github/tokens/${token.id}/organizations/${selectedOrg}/check-access`
-                : `GET /v1/github/tokens/${token.id}/check-access`}
+                ? `Đang kiểm tra phạm vi Organization: ${selectedOrg}`
+                : 'Kiểm tra quyền Đọc & Ghi (Push) trên toàn bộ Organization và Repository'}
             </p>
           </div>
           <button

@@ -403,10 +403,10 @@ export function BatchDefaultConfigModal({
               id="batch-default-config-title"
               className="font-display text-base font-semibold text-slate-900 dark:text-slate-100 truncate"
             >
-              Chạy nhanh Default Config hàng loạt ({targets.length} repo chưa có domain)
+              Cấu hình Domain hàng loạt ({targets.length} repo)
             </h2>
-            <p className="mt-0.5 font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              Phạm vi: {scopeLabel} · Tuần tự gọi POST /v1/github/orgs/{'{org}'}/repos/{'{repo}'}/default-config
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+              Phạm vi: {scopeLabel} · Tự động tạo 404.html, CNAME và bật GitHub Pages
             </p>
           </div>
           <button

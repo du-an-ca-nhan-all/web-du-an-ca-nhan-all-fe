@@ -163,10 +163,10 @@ export function DefaultConfigModal({
               id="default-config-title"
               className="font-display text-base font-semibold text-slate-900 dark:text-slate-100 truncate"
             >
-              Default Config · {target.repoName}
+              Cấu hình Domain · {target.repoName}
             </h2>
-            <p className="mt-0.5 font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              POST /v1/github/orgs/{target.org}/repos/{target.repoName}/default-config
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+              Tự động tạo 404.html, CNAME và kích hoạt GitHub Pages cho {target.org}/{target.repoName}
             </p>
           </div>
           <button

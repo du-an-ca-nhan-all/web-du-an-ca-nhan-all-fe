@@ -229,11 +229,11 @@ export function ImportOrgsModal({
                 id="import-orgs-modal-title"
                 className="font-display text-base font-semibold text-slate-900 dark:text-slate-100 truncate"
               >
-                Import GitHub Organizations · {tokenLabel}
+                Import Organizations · {tokenLabel}
               </h3>
             </div>
-            <p className="mt-1 font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              GET &amp; POST /v1/github/tokens/{token.id}/organizations
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+              Chọn các GitHub Organization muốn đồng bộ vào hệ thống
             </p>
           </div>
           <button
