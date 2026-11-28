@@ -52,6 +52,9 @@ import {
   GitHubFileContentResponse,
   GitHubImportOrganizationsRequest,
   GitHubImportOrganizationsResponse,
+  GitHubOrgInvitationActionRequest,
+  GitHubOrgInvitationActionResponse,
+  GitHubOrgInvitationResponse,
   GitHubPullRepoDomainResponse,
   GitHubRepoCommitSummaryResponse,
   GitHubRepoDefaultConfigRequest,
@@ -64,6 +67,7 @@ import {
   GitHubTokenUpdateRequest,
   GitHubUploadResponse,
   ImportSelectedOrganizationsParams,
+  ListOrgInvitationsParams,
   LoginRequest,
   NewVideoParams,
   OrganizationEntity,
@@ -75,6 +79,7 @@ import {
   RegisterRequest,
   RemoveServiceRoleParams,
   RepositoryEntity,
+  RespondToOrgInvitationParams,
   RootDomainEntity,
   ServiceRolesCatalogResponse,
   SquashCommitsParams,
@@ -763,6 +768,26 @@ export class V1<SecurityDataType = unknown> {
       ...params,
     });
   /**
+   * @description Gọi GitHub API /user/memberships/orgs bằng token tương ứng với ID để lấy danh sách lời mời tham gia organization (mặc định state=pending; hỗ trợ pending, active, all). Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name ListOrgInvitations
+   * @summary Lấy danh sách yêu cầu/lời mời thêm vào GitHub Organization của user
+   * @request GET:/v1/github/tokens/{id}/org-invitations
+   * @secure
+   */
+  listOrgInvitations = (
+    { id, ...query }: ListOrgInvitationsParams,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubOrgInvitationResponse[], any>({
+      path: `/v1/github/tokens/${id}/org-invitations`,
+      method: "GET",
+      query: query,
+      secure: true,
+      ...params,
+    });
+  /**
    * @description Xác thực tài khoản bằng username/email + password. Nếu truyền serviceCode, token sẽ tự động resolve role của service đó (nếu là SuperAdmin sẽ luôn có quyền tối cao SUPER_ADMIN).
    *
    * @tags account
@@ -860,6 +885,28 @@ export class V1<SecurityDataType = unknown> {
       path: `/v1/account/${id}/roles/${serviceCode}`,
       method: "DELETE",
       secure: true,
+      ...params,
+    });
+  /**
+   * @description Cho phép user chọn ACCEPT (đồng ý qua PATCH /user/memberships/orgs/{org} với state=active) hoặc DECLINE (từ chối/hủy lời mời qua DELETE /orgs/{org}/memberships/{username}). Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name RespondToOrgInvitation
+   * @summary Đồng ý hoặc từ chối yêu cầu thêm vào GitHub Organization
+   * @request POST:/v1/github/tokens/{id}/org-invitations/{org}/respond
+   * @secure
+   */
+  respondToOrgInvitation = (
+    { id, org }: RespondToOrgInvitationParams,
+    data: GitHubOrgInvitationActionRequest,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubOrgInvitationActionResponse, any>({
+      path: `/v1/github/tokens/${id}/org-invitations/${org}/respond`,
+      method: "POST",
+      body: data,
+      secure: true,
+      type: ContentType.Json,
       ...params,
     });
   /**

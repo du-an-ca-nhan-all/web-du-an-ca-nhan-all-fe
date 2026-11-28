@@ -24,6 +24,9 @@ import {
   GitHubFileContentResponse,
   GitHubImportOrganizationsRequest,
   GitHubImportOrganizationsResponse,
+  GitHubOrgInvitationActionRequest,
+  GitHubOrgInvitationActionResponse,
+  GitHubOrgInvitationResponse,
   GitHubPullRepoDomainResponse,
   GitHubRepoCommitSummaryResponse,
   GitHubRepoDefaultConfigRequest,
@@ -852,6 +855,32 @@ export namespace V1 {
   }
 
   /**
+   * @description Gọi GitHub API /user/memberships/orgs bằng token tương ứng với ID để lấy danh sách lời mời tham gia organization (mặc định state=pending; hỗ trợ pending, active, all). Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name ListOrgInvitations
+   * @summary Lấy danh sách yêu cầu/lời mời thêm vào GitHub Organization của user
+   * @request GET:/v1/github/tokens/{id}/org-invitations
+   * @secure
+   */
+  export namespace ListOrgInvitations {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token */
+      id: string;
+    };
+    export type RequestQuery = {
+      /**
+       * Lọc theo trạng thái lời mời: pending (mặc định), active, hoặc all
+       * @default "pending"
+       * @example "pending"
+       */
+      state?: string;
+    };
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubOrgInvitationResponse[];
+  }
+
+  /**
    * @description Xác thực tài khoản bằng username/email + password. Nếu truyền serviceCode, token sẽ tự động resolve role của service đó (nếu là SuperAdmin sẽ luôn có quyền tối cao SUPER_ADMIN).
    * @tags account
    * @name Login
@@ -981,6 +1010,27 @@ export namespace V1 {
     export type RequestBody = never;
     export type RequestHeaders = {};
     export type ResponseBody = AccountResponse;
+  }
+
+  /**
+   * @description Cho phép user chọn ACCEPT (đồng ý qua PATCH /user/memberships/orgs/{org} với state=active) hoặc DECLINE (từ chối/hủy lời mời qua DELETE /orgs/{org}/memberships/{username}). Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name RespondToOrgInvitation
+   * @summary Đồng ý hoặc từ chối yêu cầu thêm vào GitHub Organization
+   * @request POST:/v1/github/tokens/{id}/org-invitations/{org}/respond
+   * @secure
+   */
+  export namespace RespondToOrgInvitation {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token */
+      id: string;
+      /** Tên (slug/login) của GitHub organization */
+      org: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = GitHubOrgInvitationActionRequest;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubOrgInvitationActionResponse;
   }
 
   /**

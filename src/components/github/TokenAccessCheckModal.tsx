@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Building2,
@@ -56,6 +56,8 @@ export function TokenAccessCheckModal({
   const [search, setSearch] = useState('');
 
   const tokenId = token?.id || '';
+  const onResultUpdatedRef = useRef(onResultUpdated);
+  onResultUpdatedRef.current = onResultUpdated;
 
   const runCheck = useCallback(
     async (orgSlug: string) => {
@@ -77,8 +79,8 @@ export function TokenAccessCheckModal({
               serverConfig.useProxy
             );
         setResult(res);
-        if (!trimmedOrg && onResultUpdated) {
-          onResultUpdated(tokenId, res);
+        if (!trimmedOrg && onResultUpdatedRef.current) {
+          onResultUpdatedRef.current(tokenId, res);
         }
       } catch (err) {
         if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
@@ -94,7 +96,7 @@ export function TokenAccessCheckModal({
         setLoading(false);
       }
     },
-    [tokenId, v1, serverConfig.useProxy, onResultUpdated, onAuthFailure]
+    [tokenId, v1, serverConfig.useProxy, onAuthFailure]
   );
 
   useEffect(() => {

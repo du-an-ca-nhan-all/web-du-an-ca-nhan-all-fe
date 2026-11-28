@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Building2,
@@ -7,6 +7,7 @@ import {
   Copy,
   KeyRound,
   Loader2,
+  Mail,
   Plus,
   RefreshCw,
   Search,
@@ -30,6 +31,7 @@ import { useToast } from '../../context/ToastContext';
 import { formatDateTime } from '../../utils/format';
 import { AddTokenModal } from './AddTokenModal';
 import { ImportOrgsModal } from './ImportOrgsModal';
+import { OrgInvitationsModal } from './OrgInvitationsModal';
 import { TokenAccessCheckModal } from './TokenAccessCheckModal';
 
 interface TokensPanelProps {
@@ -69,12 +71,30 @@ export function TokensPanel({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [importTargetToken, setImportTargetToken] = useState<GitHubTokenResponse | null>(null);
+  const [invitationsTargetToken, setInvitationsTargetToken] =
+    useState<GitHubTokenResponse | null>(null);
+  const [pendingInvitationCounts, setPendingInvitationCounts] = useState<Record<string, number>>(
+    {}
+  );
   const [accessCheckTargetToken, setAccessCheckTargetToken] =
     useState<GitHubTokenResponse | null>(null);
   const [accessCheckResults, setAccessCheckResults] = useState<
     Record<string, GitHubTokenAccessCheckResponse>
   >({});
   const [checkingAllSuperTokens, setCheckingAllSuperTokens] = useState(false);
+
+  const handlePendingCountUpdated = useCallback((tokenId: string, pendingCount: number) => {
+    setPendingInvitationCounts((prev) =>
+      prev[tokenId] === pendingCount ? prev : { ...prev, [tokenId]: pendingCount }
+    );
+  }, []);
+
+  const handleAccessResultUpdated = useCallback(
+    (tokenId: string, res: GitHubTokenAccessCheckResponse) => {
+      setAccessCheckResults((prev) => ({ ...prev, [tokenId]: res }));
+    },
+    []
+  );
 
   const superTokens = useMemo(
     () => tokens.filter((t) => Boolean(t.isSuperToken) && Boolean(t.id)),
@@ -535,6 +555,21 @@ export function TokensPanel({
                       <button
                         type="button"
                         disabled={isBusy || !id}
+                        onClick={() => setInvitationsTargetToken(item)}
+                        className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#090D16] px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                      >
+                        <Mail className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Lời mời Org</span>
+                        {id && pendingInvitationCounts[id] !== undefined && pendingInvitationCounts[id] > 0 && (
+                          <span className="rounded-full bg-amber-100 dark:bg-amber-950/70 px-1.5 py-0.5 font-mono text-[10px] font-semibold tabular-nums text-amber-800 dark:text-amber-300">
+                            {pendingInvitationCounts[id]}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBusy || !id}
                         onClick={() => setAccessCheckTargetToken(item)}
                         className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#090D16] px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
                       >
@@ -611,15 +646,20 @@ export function TokensPanel({
         onAuthFailure={onAuthFailure}
       />
 
+      <OrgInvitationsModal
+        token={invitationsTargetToken}
+        onClose={() => setInvitationsTargetToken(null)}
+        onPendingCountUpdated={handlePendingCountUpdated}
+        onAuthFailure={onAuthFailure}
+      />
+
       <TokenAccessCheckModal
         token={accessCheckTargetToken}
         organizations={organizations}
         initialResult={
           accessCheckTargetToken?.id ? accessCheckResults[accessCheckTargetToken.id] : null
         }
-        onResultUpdated={(tokenId, res) => {
-          setAccessCheckResults((prev) => ({ ...prev, [tokenId]: res }));
-        }}
+        onResultUpdated={handleAccessResultUpdated}
         onClose={() => setAccessCheckTargetToken(null)}
         onAuthFailure={onAuthFailure}
       />

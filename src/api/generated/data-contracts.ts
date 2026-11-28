@@ -735,6 +735,102 @@ export interface GitHubOrgAccessStatus {
   state?: string;
 }
 
+export interface GitHubOrgInvitationActionRequest {
+  /**
+   * Lựa chọn xử lý lời mời vào organization: ACCEPT (đồng ý) hoặc DECLINE (từ chối)
+   * @example "ACCEPT"
+   */
+  action: GitHubOrgInvitationActionRequestActionEnum;
+}
+
+/**
+ * Lựa chọn xử lý lời mời vào organization: ACCEPT (đồng ý) hoặc DECLINE (từ chối)
+ * @example "ACCEPT"
+ */
+export enum GitHubOrgInvitationActionRequestActionEnum {
+  ACCEPT = "ACCEPT",
+  DECLINE = "DECLINE",
+}
+
+export interface GitHubOrgInvitationActionResponse {
+  /**
+   * Hành động đã thực hiện (ACCEPT hoặc DECLINE)
+   * @example "ACCEPT"
+   */
+  action?: GitHubOrgInvitationActionResponseActionEnum;
+  /** Thông báo kết quả xử lý */
+  message?: string;
+  /**
+   * Slug / login của GitHub Organization
+   * @example "my-org"
+   */
+  org?: string;
+  /**
+   * Vai trò trong organization (nếu đồng ý)
+   * @example "member"
+   */
+  role?: string;
+  /**
+   * Trạng thái sau khi xử lý (active hoặc declined)
+   * @example "active"
+   */
+  state?: string;
+  /**
+   * Username GitHub của tài khoản xử lý
+   * @example "octocat"
+   */
+  username?: string;
+}
+
+/**
+ * Hành động đã thực hiện (ACCEPT hoặc DECLINE)
+ * @example "ACCEPT"
+ */
+export enum GitHubOrgInvitationActionResponseActionEnum {
+  ACCEPT = "ACCEPT",
+  DECLINE = "DECLINE",
+}
+
+export interface GitHubOrgInvitationResponse {
+  /** URL ảnh đại diện của organization */
+  avatarUrl?: string;
+  /** Mô tả của organization trên GitHub */
+  description?: string;
+  /**
+   * GitHub numeric ID của organization
+   * @format int64
+   * @example 12345678
+   */
+  githubOrgId?: number;
+  /**
+   * Đường dẫn web GitHub để xem/xử lý lời mời trực tiếp
+   * @example "https://github.com/orgs/my-org/invitation"
+   */
+  invitationUrl?: string;
+  /** URL API membership trả về từ GitHub */
+  membershipApiUrl?: string;
+  /**
+   * Slug / login của GitHub Organization
+   * @example "my-org"
+   */
+  org?: string;
+  /**
+   * Vai trò được mời trong organization (member, admin)
+   * @example "member"
+   */
+  role?: string;
+  /**
+   * Trạng thái membership trên GitHub (pending, active)
+   * @example "pending"
+   */
+  state?: string;
+  /**
+   * Username GitHub của user nhận lời mời
+   * @example "octocat"
+   */
+  username?: string;
+}
+
 export interface GitHubPullRepoDomainResponse {
   /**
    * Domain hiện tại trong database sau khi pull
@@ -1115,6 +1211,17 @@ export interface ImportedOrganizationItem {
   org?: string;
 }
 
+export interface ListOrgInvitationsParams {
+  /** ID ngẫu nhiên (UUID) của token */
+  id: string;
+  /**
+   * Lọc theo trạng thái lời mời: pending (mặc định), active, hoặc all
+   * @default "pending"
+   * @example "pending"
+   */
+  state?: string;
+}
+
 /** Yêu cầu đăng nhập tài khoản */
 export interface LoginRequest {
   /**
@@ -1388,6 +1495,13 @@ export interface RepositoryEntity {
   id?: number;
   org?: string;
   repoName?: string;
+}
+
+export interface RespondToOrgInvitationParams {
+  /** ID ngẫu nhiên (UUID) của token */
+  id: string;
+  /** Tên (slug/login) của GitHub organization */
+  org: string;
 }
 
 export interface RootDomainEntity {
