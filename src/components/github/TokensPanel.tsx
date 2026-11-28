@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Building2,
   Check,
+  CheckCircle2,
   Copy,
   Eye,
   EyeOff,
@@ -13,6 +14,8 @@ import {
   RefreshCw,
   Search,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
   Trash2,
   UserCheck,
 } from 'lucide-react';
@@ -20,15 +23,19 @@ import {
   ApiClientError,
   executeApi,
   useBackendClient,
+  type GitHubTokenAccessCheckResponse,
   type GitHubTokenResponse,
+  type OrganizationEntity,
 } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { formatDateTime } from '../../utils/format';
 import { ImportOrgsModal } from './ImportOrgsModal';
+import { TokenAccessCheckModal } from './TokenAccessCheckModal';
 
 interface TokensPanelProps {
   tokens: GitHubTokenResponse[];
+  organizations: OrganizationEntity[];
   loading: boolean;
   error: string | null;
   superTokenOnly: boolean;
@@ -40,6 +47,7 @@ interface TokensPanelProps {
 
 export function TokensPanel({
   tokens,
+  organizations,
   loading,
   error,
   superTokenOnly,
@@ -70,6 +78,58 @@ export function TokensPanel({
 
   // Import Orgs modal target
   const [importTargetToken, setImportTargetToken] = useState<GitHubTokenResponse | null>(null);
+
+  // Access check modal & cached per-token full-DB results
+  const [accessCheckTargetToken, setAccessCheckTargetToken] =
+    useState<GitHubTokenResponse | null>(null);
+  const [accessCheckResults, setAccessCheckResults] = useState<
+    Record<string, GitHubTokenAccessCheckResponse>
+  >({});
+  const [checkingAllSuperTokens, setCheckingAllSuperTokens] = useState(false);
+
+  const superTokens = useMemo(
+    () => tokens.filter((t) => Boolean(t.isSuperToken) && Boolean(t.id)),
+    [tokens]
+  );
+
+  const handleCheckAllSuperTokens = async () => {
+    if (superTokens.length === 0) return;
+    setCheckingAllSuperTokens(true);
+    setActionError(null);
+
+    let fullCount = 0;
+    let partialCount = 0;
+    let failedCount = 0;
+
+    for (const item of superTokens) {
+      if (!item.id) continue;
+      try {
+        const res = await executeApi(
+          v1.checkTokenAccess({ id: encodeURIComponent(item.id) }),
+          serverConfig.useProxy
+        );
+        setAccessCheckResults((prev) => ({ ...prev, [item.id!]: res }));
+        if (res.hasFullAccess) fullCount += 1;
+        else partialCount += 1;
+      } catch (err) {
+        if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+          setCheckingAllSuperTokens(false);
+          onAuthFailure(err.message);
+          return;
+        }
+        failedCount += 1;
+      }
+    }
+
+    setCheckingAllSuperTokens(false);
+    notify({
+      tone: partialCount === 0 && failedCount === 0 ? 'success' : 'info',
+      title: `Đã kiểm tra ${superTokens.length} Super Token`,
+      description: `Đủ quyền R/W: ${fullCount} · Thiếu quyền: ${partialCount}${
+        failedCount > 0 ? ` · Lỗi kiểm tra: ${failedCount}` : ''
+      }`,
+    });
+  };
 
   const visibleTokens = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -346,6 +406,24 @@ export function TokensPanel({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {superTokens.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleCheckAllSuperTokens()}
+                  disabled={checkingAllSuperTokens || loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/80 dark:bg-indigo-950/35 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 disabled:opacity-50 transition-colors whitespace-nowrap shrink-0"
+                >
+                  {checkingAllSuperTokens ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                  )}
+                  {checkingAllSuperTokens
+                    ? 'Đang kiểm tra...'
+                    : `Kiểm tra ${superTokens.length} Super Token`}
+                </button>
+              )}
+
               <div className="inline-flex rounded-lg bg-slate-200/70 dark:bg-slate-800 p-0.5 text-[11px] font-medium">
                 <button
                   type="button"
@@ -442,6 +520,7 @@ export function TokensPanel({
                 const isDeleting = deletingId === id;
                 const isConfirming = confirmDeleteId === id;
                 const isBusy = isUpdating || isSyncing || isDeleting;
+                const cachedAccess = id ? accessCheckResults[id] : undefined;
 
                 return (
                   <div
@@ -509,6 +588,31 @@ export function TokensPanel({
                             </span>
                           )}
                         </div>
+
+                        {cachedAccess && (
+                          <button
+                            type="button"
+                            onClick={() => setAccessCheckTargetToken(item)}
+                            className={`mt-1 inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                              cachedAccess.hasFullAccess
+                                ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/35 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/55'
+                                : 'border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/35 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/55'
+                            }`}
+                          >
+                            {cachedAccess.hasFullAccess ? (
+                              <CheckCircle2 className="h-3 w-3 shrink-0" />
+                            ) : (
+                              <ShieldAlert className="h-3 w-3 shrink-0" />
+                            )}
+                            <span>
+                              {cachedAccess.hasFullAccess ? 'Đủ quyền Đọc/Ghi' : 'Thiếu quyền'} ·{' '}
+                              {cachedAccess.accessibleOrganizationsCount ?? 0}/
+                              {cachedAccess.totalOrganizations ?? 0} Org ·{' '}
+                              {cachedAccess.accessibleRepositoriesCount ?? 0}/
+                              {cachedAccess.totalRepositories ?? 0} Repo
+                            </span>
+                          </button>
+                        )}
                       </div>
 
                       {/* Status toggles */}
@@ -566,6 +670,16 @@ export function TokensPanel({
                         >
                           <Building2 className="h-3.5 w-3.5" />
                           Import Org
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={isBusy || !id}
+                          onClick={() => setAccessCheckTargetToken(item)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/70 dark:bg-indigo-950/30 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-950/55 disabled:opacity-50 transition-colors"
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          Kiểm tra quyền R/W
                         </button>
 
                         <button
@@ -629,6 +743,19 @@ export function TokensPanel({
         token={importTargetToken}
         onClose={() => setImportTargetToken(null)}
         onImported={() => onOrganizationsImported()}
+        onAuthFailure={onAuthFailure}
+      />
+
+      <TokenAccessCheckModal
+        token={accessCheckTargetToken}
+        organizations={organizations}
+        initialResult={
+          accessCheckTargetToken?.id ? accessCheckResults[accessCheckTargetToken.id] : null
+        }
+        onResultUpdated={(tokenId, res) => {
+          setAccessCheckResults((prev) => ({ ...prev, [tokenId]: res }));
+        }}
+        onClose={() => setAccessCheckTargetToken(null)}
         onAuthFailure={onAuthFailure}
       />
     </>

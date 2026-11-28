@@ -846,6 +846,7 @@ export function GitHubUploadView({ onAuthFailure }: GitHubUploadViewProps) {
       ) : activeTab === 'tokens' ? (
         <TokensPanel
           tokens={tokens}
+          organizations={organizations}
           loading={tokensLoading}
           error={tokensError}
           superTokenOnly={superTokenOnly}
