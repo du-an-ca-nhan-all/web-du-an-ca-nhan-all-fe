@@ -52,9 +52,11 @@ import {
   GitHubFileContentResponse,
   GitHubImportOrganizationsRequest,
   GitHubImportOrganizationsResponse,
+  GitHubInviteOrgMemberRequest,
   GitHubOrgInvitationActionRequest,
   GitHubOrgInvitationActionResponse,
   GitHubOrgInvitationResponse,
+  GitHubOrgInviteMemberResponse,
   GitHubPullRepoDomainResponse,
   GitHubRepoCommitSummaryResponse,
   GitHubRepoDefaultConfigRequest,
@@ -68,6 +70,7 @@ import {
   GitHubTokenUpdateRequest,
   GitHubUploadResponse,
   ImportSelectedOrganizationsParams,
+  InviteMemberToOrgParams,
   ListOrgInvitationsParams,
   LoginRequest,
   NewVideoParams,
@@ -761,6 +764,28 @@ export class V1<SecurityDataType = unknown> {
   ) =>
     this.http.request<GitHubImportOrganizationsResponse, any>({
       path: `/v1/github/tokens/${id}/organizations/import`,
+      method: "POST",
+      body: data,
+      secure: true,
+      type: ContentType.Json,
+      ...params,
+    });
+  /**
+   * @description Dùng token quản trị org (theo ID) gọi GitHub API PUT /orgs/{org}/memberships/{username} với role=member để gửi lời mời cho user (truyền username hoặc targetTokenId). Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name InviteMemberToOrg
+   * @summary Mời một user vào GitHub Organization với quyền member
+   * @request POST:/v1/github/tokens/{id}/organizations/{org}/invitations
+   * @secure
+   */
+  inviteMemberToOrg = (
+    { id, org }: InviteMemberToOrgParams,
+    data: GitHubInviteOrgMemberRequest,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubOrgInviteMemberResponse, any>({
+      path: `/v1/github/tokens/${id}/organizations/${org}/invitations`,
       method: "POST",
       body: data,
       secure: true,

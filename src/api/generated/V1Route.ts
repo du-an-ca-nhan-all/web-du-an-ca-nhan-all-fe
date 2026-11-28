@@ -24,9 +24,11 @@ import {
   GitHubFileContentResponse,
   GitHubImportOrganizationsRequest,
   GitHubImportOrganizationsResponse,
+  GitHubInviteOrgMemberRequest,
   GitHubOrgInvitationActionRequest,
   GitHubOrgInvitationActionResponse,
   GitHubOrgInvitationResponse,
+  GitHubOrgInviteMemberResponse,
   GitHubPullRepoDomainResponse,
   GitHubRepoCommitSummaryResponse,
   GitHubRepoDefaultConfigRequest,
@@ -854,6 +856,27 @@ export namespace V1 {
     export type RequestBody = GitHubImportOrganizationsRequest;
     export type RequestHeaders = {};
     export type ResponseBody = GitHubImportOrganizationsResponse;
+  }
+
+  /**
+   * @description Dùng token quản trị org (theo ID) gọi GitHub API PUT /orgs/{org}/memberships/{username} với role=member để gửi lời mời cho user (truyền username hoặc targetTokenId). Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name InviteMemberToOrg
+   * @summary Mời một user vào GitHub Organization với quyền member
+   * @request POST:/v1/github/tokens/{id}/organizations/{org}/invitations
+   * @secure
+   */
+  export namespace InviteMemberToOrg {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token có quyền quản trị organization */
+      id: string;
+      /** Tên (slug/login) của GitHub organization */
+      org: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = GitHubInviteOrgMemberRequest;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubOrgInviteMemberResponse;
   }
 
   /**

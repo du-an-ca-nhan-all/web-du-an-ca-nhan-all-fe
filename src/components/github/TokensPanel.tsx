@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Trash2,
   UserCheck,
+  UserPlus,
   X,
 } from 'lucide-react';
 import {
@@ -32,6 +33,7 @@ import { useToast } from '../../context/ToastContext';
 import { formatDateTime } from '../../utils/format';
 import { AddTokenModal } from './AddTokenModal';
 import { ImportOrgsModal } from './ImportOrgsModal';
+import { InviteOrgMemberModal } from './InviteOrgMemberModal';
 import { OrgInvitationsModal } from './OrgInvitationsModal';
 import {
   TokenAccessCheckModal,
@@ -77,6 +79,7 @@ export function TokensPanel({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [importTargetToken, setImportTargetToken] = useState<GitHubTokenResponse | null>(null);
+  const [inviteFromToken, setInviteFromToken] = useState<GitHubTokenResponse | null>(null);
   const [invitationsTargetToken, setInvitationsTargetToken] =
     useState<GitHubTokenResponse | null>(null);
   const [pendingInvitationCounts, setPendingInvitationCounts] = useState<Record<string, number>>(
@@ -592,6 +595,16 @@ export function TokensPanel({
                       <button
                         type="button"
                         disabled={isBusy || !id}
+                        onClick={() => setInviteFromToken(item)}
+                        className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#090D16] px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                      >
+                        <UserPlus className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Mời thành viên
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBusy || !id}
                         onClick={() => setInvitationsTargetToken(item)}
                         className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#090D16] px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
                       >
@@ -680,6 +693,13 @@ export function TokensPanel({
         token={importTargetToken}
         onClose={() => setImportTargetToken(null)}
         onImported={() => onOrganizationsImported()}
+        onAuthFailure={onAuthFailure}
+      />
+
+      <InviteOrgMemberModal
+        inviterToken={inviteFromToken}
+        allTokens={tokens}
+        onClose={() => setInviteFromToken(null)}
         onAuthFailure={onAuthFailure}
       />
 

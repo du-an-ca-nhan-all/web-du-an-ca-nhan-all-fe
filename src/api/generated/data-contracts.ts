@@ -712,6 +712,19 @@ export interface GitHubImportOrganizationsResponse {
   skippedExistingOrgs?: string[];
 }
 
+export interface GitHubInviteOrgMemberRequest {
+  /**
+   * ID (UUID) của token đích trong hệ thống để tự động lấy username cần mời (dùng thay cho username nếu muốn chọn từ danh sách token)
+   * @example "550e8400-e29b-41d4-a716-446655440000"
+   */
+  targetTokenId?: string;
+  /**
+   * GitHub username của user cần mời vào organization (bắt buộc nếu không truyền targetTokenId)
+   * @example "octocat"
+   */
+  username?: string;
+}
+
 export interface GitHubOrgInvitationActionRequest {
   /**
    * Lựa chọn xử lý lời mời vào organization: ACCEPT (đồng ý) hoặc DECLINE (từ chối)
@@ -803,6 +816,38 @@ export interface GitHubOrgInvitationResponse {
   state?: string;
   /**
    * Username GitHub của user nhận lời mời
+   * @example "octocat"
+   */
+  username?: string;
+}
+
+export interface GitHubOrgInviteMemberResponse {
+  /**
+   * Đường dẫn web GitHub để user xem/chấp nhận lời mời
+   * @example "https://github.com/orgs/my-org/invitation"
+   */
+  invitationUrl?: string;
+  /** URL API membership trả về từ GitHub */
+  membershipApiUrl?: string;
+  /** Thông báo kết quả gửi lời mời */
+  message?: string;
+  /**
+   * Tên (slug/login) của GitHub Organization
+   * @example "my-org"
+   */
+  org?: string;
+  /**
+   * Vai trò được gán trong organization
+   * @example "member"
+   */
+  role?: string;
+  /**
+   * Trạng thái membership trả về từ GitHub (pending nếu mới gửi lời mời, active nếu đã là thành viên)
+   * @example "pending"
+   */
+  state?: string;
+  /**
+   * GitHub username của user được mời
    * @example "octocat"
    */
   username?: string;
@@ -1178,6 +1223,13 @@ export interface ImportedOrganizationItem {
   description?: string;
   name?: string;
   org?: string;
+}
+
+export interface InviteMemberToOrgParams {
+  /** ID ngẫu nhiên (UUID) của token có quyền quản trị organization */
+  id: string;
+  /** Tên (slug/login) của GitHub organization */
+  org: string;
 }
 
 export interface ListOrgInvitationsParams {
