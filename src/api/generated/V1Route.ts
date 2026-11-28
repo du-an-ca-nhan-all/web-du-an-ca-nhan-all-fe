@@ -25,6 +25,7 @@ import {
   GitHubImportOrganizationsRequest,
   GitHubImportOrganizationsResponse,
   GitHubInviteOrgMemberRequest,
+  GitHubOrgAutoJoinResponse,
   GitHubOrgInvitationActionRequest,
   GitHubOrgInvitationActionResponse,
   GitHubOrgInvitationResponse,
@@ -85,6 +86,27 @@ export namespace V1 {
     export type RequestBody = AssignRoleRequest;
     export type RequestHeaders = {};
     export type ResponseBody = AccountResponse;
+  }
+
+  /**
+   * @description Dùng sau khi kiểm tra thấy token đích chưa có quyền vào organization: hệ thống tự động tìm một token active khác đang là admin của organization đó, gửi lời mời với quyền member cho user đích, rồi dùng token đích đồng ý lời mời ngay lập tức. Yêu cầu quyền SUPER_ADMIN.
+   * @tags github-upload
+   * @name AutoJoinOrganization
+   * @summary Tự động tìm token quản trị org, mời user vào org (member) và đồng ý luôn
+   * @request POST:/v1/github/tokens/{id}/organizations/{org}/auto-join
+   * @secure
+   */
+  export namespace AutoJoinOrganization {
+    export type RequestParams = {
+      /** ID ngẫu nhiên (UUID) của token đích cần được thêm vào organization */
+      id: string;
+      /** Tên (slug/login) của GitHub organization */
+      org: string;
+    };
+    export type RequestQuery = {};
+    export type RequestBody = never;
+    export type RequestHeaders = {};
+    export type ResponseBody = GitHubOrgAutoJoinResponse;
   }
 
   /**

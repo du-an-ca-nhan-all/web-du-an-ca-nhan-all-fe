@@ -15,6 +15,7 @@ import {
   AssignRoleRequest,
   AssignServiceRoleParams,
   AuthResponse,
+  AutoJoinOrganizationParams,
   CategoryServiceModel,
   CategoryUpsertRequest,
   CheckTokenOrgAccessParams,
@@ -53,6 +54,7 @@ import {
   GitHubImportOrganizationsRequest,
   GitHubImportOrganizationsResponse,
   GitHubInviteOrgMemberRequest,
+  GitHubOrgAutoJoinResponse,
   GitHubOrgInvitationActionRequest,
   GitHubOrgInvitationActionResponse,
   GitHubOrgInvitationResponse,
@@ -132,6 +134,25 @@ export class V1<SecurityDataType = unknown> {
       body: data,
       secure: true,
       type: ContentType.Json,
+      ...params,
+    });
+  /**
+   * @description Dùng sau khi kiểm tra thấy token đích chưa có quyền vào organization: hệ thống tự động tìm một token active khác đang là admin của organization đó, gửi lời mời với quyền member cho user đích, rồi dùng token đích đồng ý lời mời ngay lập tức. Yêu cầu quyền SUPER_ADMIN.
+   *
+   * @tags github-upload
+   * @name AutoJoinOrganization
+   * @summary Tự động tìm token quản trị org, mời user vào org (member) và đồng ý luôn
+   * @request POST:/v1/github/tokens/{id}/organizations/{org}/auto-join
+   * @secure
+   */
+  autoJoinOrganization = (
+    { id, org }: AutoJoinOrganizationParams,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<GitHubOrgAutoJoinResponse, any>({
+      path: `/v1/github/tokens/${id}/organizations/${org}/auto-join`,
+      method: "POST",
+      secure: true,
       ...params,
     });
   /**

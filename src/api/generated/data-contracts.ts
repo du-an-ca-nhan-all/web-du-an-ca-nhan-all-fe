@@ -114,6 +114,13 @@ export interface Author {
   url?: string;
 }
 
+export interface AutoJoinOrganizationParams {
+  /** ID ngẫu nhiên (UUID) của token đích cần được thêm vào organization */
+  id: string;
+  /** Tên (slug/login) của GitHub organization */
+  org: string;
+}
+
 export interface CategoriesAllParams {
   /** @default "en" */
   lang?: string;
@@ -723,6 +730,42 @@ export interface GitHubInviteOrgMemberRequest {
    * @example "octocat"
    */
   username?: string;
+}
+
+export interface GitHubOrgAutoJoinResponse {
+  /** ID (UUID) của token quản trị (admin) đã dùng để gửi lời mời (null nếu đã có sẵn lời mời/quyền) */
+  managerTokenId?: string;
+  /** GitHub username của tài khoản quản trị đã gửi lời mời */
+  managerUsername?: string;
+  /** Thông báo chi tiết kết quả thực hiện */
+  message?: string;
+  /**
+   * Tên (slug/login) của GitHub Organization
+   * @example "my-org"
+   */
+  org?: string;
+  /**
+   * Vai trò trong organization sau khi hoàn tất
+   * @example "member"
+   */
+  role?: string;
+  /**
+   * Trạng thái membership sau khi hoàn tất
+   * @example "active"
+   */
+  state?: string;
+  /**
+   * Kết quả xử lý: JOINED, ACCEPTED_EXISTING_INVITATION, hoặc ALREADY_MEMBER
+   * @example "JOINED"
+   */
+  status?: string;
+  /** ID (UUID) của token đích được thêm vào organization */
+  targetTokenId?: string;
+  /**
+   * GitHub username của user đích
+   * @example "member-user"
+   */
+  targetUsername?: string;
 }
 
 export interface GitHubOrgInvitationActionRequest {

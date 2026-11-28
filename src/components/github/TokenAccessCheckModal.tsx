@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Square,
+  UserPlus,
   X,
   XCircle,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ import {
   ApiClientError,
   executeApi,
   useBackendClient,
+  type GitHubOrgAutoJoinResponse,
   type GitHubTokenOrgAccessCheckResponse,
   type GitHubTokenRepoAccessCheckResponse,
   type GitHubTokenResponse,
@@ -80,8 +82,9 @@ export function TokenAccessCheckModal({
 
   const [checkingOrgKey, setCheckingOrgKey] = useState<string | null>(null);
   const [checkingRepoKey, setCheckingRepoKey] = useState<string | null>(null);
+  const [grantingOrgKey, setGrantingOrgKey] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{
-    mode: ResultTab;
+    mode: ResultTab | 'grant-orgs';
     completed: number;
     total: number;
     ok: number;
@@ -117,6 +120,7 @@ export function TokenAccessCheckModal({
     setBatchProgress(null);
     setCheckingOrgKey(null);
     setCheckingRepoKey(null);
+    setGrantingOrgKey(null);
     setActiveTab('organizations');
     setSelectedRepoOrg('');
     setStatusFilter('all');
@@ -128,7 +132,7 @@ export function TokenAccessCheckModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokenId]);
 
-  const isRunning = Boolean(checkingOrgKey || checkingRepoKey || batchProgress);
+  const isRunning = Boolean(checkingOrgKey || checkingRepoKey || grantingOrgKey || batchProgress);
 
   useEffect(() => {
     if (!tokenId) return;
@@ -172,6 +176,13 @@ export function TokenAccessCheckModal({
     const lower = selectedRepoOrg.toLowerCase();
     return normalizedRepos.filter((r) => r.org.toLowerCase() === lower);
   }, [normalizedRepos, selectedRepoOrg]);
+
+  const missingAccessOrgs = useMemo(() => {
+    return normalizedOrgs.filter((item) => {
+      const res = orgResults[item.org.toLowerCase()];
+      return Boolean(res && !res.accessible);
+    });
+  }, [normalizedOrgs, orgResults]);
 
   const visibleOrgs = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -301,6 +312,186 @@ export function TokenAccessCheckModal({
     } finally {
       if (mountedRef.current) setCheckingRepoKey(null);
     }
+  };
+
+  const buildGrantedOrgResult = (
+    prev: GitHubTokenOrgAccessCheckResponse | undefined,
+    orgSlug: string,
+    joinRes: GitHubOrgAutoJoinResponse
+  ): GitHubTokenOrgAccessCheckResponse => ({
+    ...prev,
+    org: joinRes.org || orgSlug,
+    accessible: true,
+    role: joinRes.role || 'member',
+    state: joinRes.state || 'active',
+    error: undefined,
+    isActive: prev?.isActive ?? token.isActive,
+    isSuperToken: prev?.isSuperToken ?? token.isSuperToken,
+  });
+
+  const formatAutoJoinDescription = (joinRes: GitHubOrgAutoJoinResponse, orgSlug: string) => {
+    if (joinRes.message?.trim()) return joinRes.message.trim();
+    const parts: string[] = [];
+    if (joinRes.status === 'ALREADY_MEMBER') {
+      parts.push(`Đã là thành viên của ${joinRes.org || orgSlug}`);
+    } else if (joinRes.status === 'ACCEPTED_EXISTING_INVITATION') {
+      parts.push(`Đã đồng ý lời mời sẵn có vào ${joinRes.org || orgSlug}`);
+    } else {
+      parts.push(`Đã mời và đồng ý vào ${joinRes.org || orgSlug}`);
+    }
+    if (joinRes.managerUsername) parts.push(`Admin: @${joinRes.managerUsername}`);
+    if (joinRes.role) parts.push(`Role: ${joinRes.role}`);
+    return parts.join(' · ');
+  };
+
+  const grantSingleOrg = async (orgSlug: string) => {
+    if (!tokenId || !orgSlug) return;
+    const key = orgSlug.toLowerCase();
+    setGrantingOrgKey(key);
+    setError(null);
+    try {
+      const joinRes = await executeApi(
+        v1.autoJoinOrganization({
+          id: encodeURIComponent(tokenId),
+          org: encodeURIComponent(orgSlug),
+        }),
+        serverConfig.useProxy
+      );
+      if (!mountedRef.current) return;
+      const nextOrgs = {
+        ...orgResultsRef.current,
+        [key]: buildGrantedOrgResult(orgResultsRef.current[key], orgSlug, joinRes),
+      };
+      setOrgResults(nextOrgs);
+      syncCacheToParent(nextOrgs, repoResultsRef.current);
+      notify({
+        tone: 'success',
+        title: `Đã cấp quyền vào ${joinRes.org || orgSlug}`,
+        description: formatAutoJoinDescription(joinRes, orgSlug),
+      });
+    } catch (err) {
+      if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+        onAuthFailure(err.message);
+        return;
+      }
+      if (!mountedRef.current) return;
+      const msg =
+        err instanceof ApiClientError
+          ? err.message
+          : `Không thể tự động cấp quyền vào org "${orgSlug}".`;
+      const prev = orgResultsRef.current[key];
+      const failedRes: GitHubTokenOrgAccessCheckResponse = {
+        ...prev,
+        org: prev?.org || orgSlug,
+        accessible: false,
+        error: msg,
+      };
+      const nextOrgs = { ...orgResultsRef.current, [key]: failedRes };
+      setOrgResults(nextOrgs);
+      syncCacheToParent(nextOrgs, repoResultsRef.current);
+      notify({
+        tone: 'error',
+        title: `Cấp quyền thất bại (${orgSlug})`,
+        description: msg,
+      });
+    } finally {
+      if (mountedRef.current) setGrantingOrgKey(null);
+    }
+  };
+
+  const handleGrantMissingOrgs = async () => {
+    const targets = [...missingAccessOrgs];
+    if (!tokenId || targets.length === 0) return;
+    stopRef.current = false;
+    setStopping(false);
+    setError(null);
+    setBatchProgress({
+      mode: 'grant-orgs',
+      completed: 0,
+      total: targets.length,
+      ok: 0,
+      issues: 0,
+    });
+
+    let okCount = 0;
+    let issueCount = 0;
+    let stoppedEarly = false;
+    let latestOrgs = { ...orgResultsRef.current };
+
+    for (let i = 0; i < targets.length; i++) {
+      if (stopRef.current || !mountedRef.current) {
+        stoppedEarly = true;
+        break;
+      }
+
+      const item = targets[i];
+      const key = item.org.toLowerCase();
+      setGrantingOrgKey(key);
+
+      try {
+        const joinRes = await executeApi(
+          v1.autoJoinOrganization({
+            id: encodeURIComponent(tokenId),
+            org: encodeURIComponent(item.org),
+          }),
+          serverConfig.useProxy
+        );
+        latestOrgs = {
+          ...latestOrgs,
+          [key]: buildGrantedOrgResult(latestOrgs[key], item.org, joinRes),
+        };
+        okCount += 1;
+      } catch (err) {
+        if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+          if (mountedRef.current) {
+            setGrantingOrgKey(null);
+            setBatchProgress(null);
+            setStopping(false);
+          }
+          onAuthFailure(err.message);
+          return;
+        }
+        issueCount += 1;
+        const prev = latestOrgs[key];
+        latestOrgs = {
+          ...latestOrgs,
+          [key]: {
+            ...prev,
+            org: prev?.org || item.org,
+            accessible: false,
+            error:
+              err instanceof ApiClientError
+                ? err.message
+                : `Không thể tự động cấp quyền vào org "${item.org}".`,
+          },
+        };
+      }
+
+      if (mountedRef.current) {
+        setOrgResults(latestOrgs);
+        setBatchProgress({
+          mode: 'grant-orgs',
+          completed: i + 1,
+          total: targets.length,
+          ok: okCount,
+          issues: issueCount,
+        });
+      }
+    }
+
+    if (!mountedRef.current) return;
+    setGrantingOrgKey(null);
+    setBatchProgress(null);
+    setStopping(false);
+    syncCacheToParent(latestOrgs, repoResultsRef.current);
+
+    notify({
+      tone: issueCount === 0 && !stoppedEarly ? 'success' : 'info',
+      title: stoppedEarly
+        ? `Đã dừng cấp quyền Org (${okCount + issueCount}/${targets.length})`
+        : `Hoàn tất cấp quyền ${targets.length} Organization`,
+      description: `Thành công: ${okCount} · Thất bại: ${issueCount}`,
+    });
   };
 
   const handleCheckAllOrgs = async () => {
@@ -582,7 +773,7 @@ export function TokenAccessCheckModal({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             {batchProgress ? (
               <button
                 type="button"
@@ -591,18 +782,36 @@ export function TokenAccessCheckModal({
                 className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-3.5 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 disabled:opacity-50 transition-colors"
               >
                 <Square className="h-3.5 w-3.5" />
-                {stopping ? 'Đang dừng...' : 'Dừng kiểm tra'}
+                {stopping
+                  ? 'Đang dừng...'
+                  : batchProgress.mode === 'grant-orgs'
+                    ? 'Dừng cấp quyền'
+                    : 'Dừng kiểm tra'}
               </button>
             ) : activeTab === 'organizations' ? (
-              <button
-                type="button"
-                disabled={isRunning || normalizedOrgs.length === 0}
-                onClick={() => void handleCheckAllOrgs()}
-                className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 px-3.5 py-1.5 text-xs font-medium text-white disabled:opacity-50 transition-colors whitespace-nowrap"
-              >
-                <Play className="h-3.5 w-3.5" />
-                Kiểm tra tất cả Org ({normalizedOrgs.length})
-              </button>
+              <>
+                {missingAccessOrgs.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={isRunning}
+                    onClick={() => void handleGrantMissingOrgs()}
+                    title="Tự động tìm token quản trị của từng org, mời vào org (member) và đồng ý luôn"
+                    className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 px-3.5 py-1.5 text-xs font-medium text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Cấp quyền tất cả ({missingAccessOrgs.length})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={isRunning || normalizedOrgs.length === 0}
+                  onClick={() => void handleCheckAllOrgs()}
+                  className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 px-3.5 py-1.5 text-xs font-medium text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  Kiểm tra tất cả Org ({normalizedOrgs.length})
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -631,30 +840,54 @@ export function TokenAccessCheckModal({
 
           {/* Live FE Loop Progress Bar */}
           {batchProgress && (
-            <div className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-950/25 p-3.5 space-y-2">
+            <div
+              className={`rounded-xl border p-3.5 space-y-2 ${
+                batchProgress.mode === 'grant-orgs'
+                  ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/25'
+                  : 'border-blue-200 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-950/25'
+              }`}
+            >
               <div className="flex items-center justify-between gap-2 text-xs">
                 <span className="inline-flex items-center gap-2 font-medium text-slate-900 dark:text-slate-100">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600 dark:text-blue-400" />
+                  <Loader2
+                    className={`h-3.5 w-3.5 animate-spin ${
+                      batchProgress.mode === 'grant-orgs'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-blue-600 dark:text-blue-400'
+                    }`}
+                  />
                   {stopping
                     ? 'Đang dừng sau mục hiện tại...'
-                    : `Đang kiểm tra ${
-                        batchProgress.mode === 'organizations' ? 'Organization' : 'Repository'
-                      } (${batchProgress.completed}/${batchProgress.total})...`}
+                    : batchProgress.mode === 'grant-orgs'
+                      ? `Đang cấp quyền Organization (${batchProgress.completed}/${batchProgress.total})...`
+                      : `Đang kiểm tra ${
+                          batchProgress.mode === 'organizations' ? 'Organization' : 'Repository'
+                        } (${batchProgress.completed}/${batchProgress.total})...`}
                 </span>
                 <span className="font-mono text-[11px] tabular-nums text-slate-600 dark:text-slate-400">
-                  Đạt:{' '}
+                  {batchProgress.mode === 'grant-orgs' ? 'Thành công: ' : 'Đạt: '}
                   <strong className="text-emerald-700 dark:text-emerald-400">
                     {batchProgress.ok}
                   </strong>{' '}
-                  · Thiếu quyền:{' '}
+                  · {batchProgress.mode === 'grant-orgs' ? 'Thất bại: ' : 'Thiếu quyền: '}
                   <strong className="text-red-700 dark:text-red-400">
                     {batchProgress.issues}
                   </strong>
                 </span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-200/70 dark:bg-slate-800">
+              <div
+                className={`h-1.5 w-full overflow-hidden rounded-full ${
+                  batchProgress.mode === 'grant-orgs'
+                    ? 'bg-emerald-200/70 dark:bg-slate-800'
+                    : 'bg-blue-200/70 dark:bg-slate-800'
+                }`}
+              >
                 <div
-                  className="h-full bg-blue-600 dark:bg-blue-500 transition-all duration-150"
+                  className={`h-full transition-all duration-150 ${
+                    batchProgress.mode === 'grant-orgs'
+                      ? 'bg-emerald-600 dark:bg-emerald-500'
+                      : 'bg-blue-600 dark:bg-blue-500'
+                  }`}
                   style={{
                     width: `${Math.min(
                       100,
@@ -817,14 +1050,17 @@ export function TokenAccessCheckModal({
                       const key = item.org.toLowerCase();
                       const res = orgResults[key];
                       const isRowChecking = checkingOrgKey === key;
+                      const isRowGranting = grantingOrgKey === key;
 
                       return (
                         <tr
                           key={item.org}
                           className={`transition-colors ${
-                            isRowChecking
-                              ? 'bg-blue-50/50 dark:bg-blue-950/20'
-                              : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/35'
+                            isRowGranting
+                              ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
+                              : isRowChecking
+                                ? 'bg-blue-50/50 dark:bg-blue-950/20'
+                                : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/35'
                           }`}
                         >
                           <td className="py-2.5 pl-4 pr-3 font-mono font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
@@ -839,7 +1075,12 @@ export function TokenAccessCheckModal({
                             </a>
                           </td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
-                            {isRowChecking ? (
+                            {isRowGranting ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Đang cấp quyền...
+                              </span>
+                            ) : isRowChecking ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400">
                                 <Loader2 className="h-3 w-3 animate-spin" />
                                 Đang kiểm tra...
@@ -868,19 +1109,37 @@ export function TokenAccessCheckModal({
                             {res?.error || '—'}
                           </td>
                           <td className="py-2.5 pl-3 pr-4 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              disabled={isRunning}
-                              onClick={() => void checkSingleOrg(item.org)}
-                              className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                            >
-                              {isRowChecking ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-3 w-3" />
+                            <div className="inline-flex items-center justify-end gap-1.5">
+                              {res && !res.accessible && (
+                                <button
+                                  type="button"
+                                  disabled={isRunning}
+                                  onClick={() => void grantSingleOrg(item.org)}
+                                  title="Tự động tìm token quản trị của org, gửi lời mời member và đồng ý luôn"
+                                  className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 disabled:opacity-50 transition-colors"
+                                >
+                                  {isRowGranting ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <UserPlus className="h-3 w-3" />
+                                  )}
+                                  Cấp quyền
+                                </button>
                               )}
-                              {res ? 'Kiểm tra lại' : 'Kiểm tra'}
-                            </button>
+                              <button
+                                type="button"
+                                disabled={isRunning}
+                                onClick={() => void checkSingleOrg(item.org)}
+                                className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                              >
+                                {isRowChecking ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-3 w-3" />
+                                )}
+                                {res ? 'Kiểm tra lại' : 'Kiểm tra'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
